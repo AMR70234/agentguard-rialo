@@ -134,7 +134,7 @@
 <div class="wrap">
 
   <div class="topbar">
-    <div class="brand"><img src="/favicon.png" alt="AgentPay" /> AgentPay</div>
+    <div class="brand"><img src="/rialo-mark.png" alt="AgentGuard" style="width:26px;height:26px;border-radius:6px;object-fit:contain;" /> AgentGuard</div>
     <div class="network">
       <span class="item"><span class="dot"></span> Arc Testnet</span>
       <span class="item" id="clock">--:--:--</span>
@@ -323,6 +323,14 @@ async function loadReputation(){
 }
 loadReputation();
 
+async function getExplorerLink(txId){
+  try{
+    const res = await fetch(`${API_BASE}/tx/${txId}`);
+    const data = await res.json();
+    if(data.txHash) return `https://testnet.arcscan.app/tx/${data.txHash}`;
+  }catch(e){}
+  return null;
+}
 function timestamp(){ return new Date().toTimeString().slice(0,8); }
 function clearLog(){ document.getElementById('log').innerHTML=''; }
 function addLine(icon, html, muted){
@@ -411,6 +419,9 @@ async function runJob(){
       setTimeout(()=>{
         pulseFlow('flowPulse2');
         addLine('✓', `Transaction <b>${data.transaction.state}</b> — id <span style="color:var(--muted)">${data.transaction.id}</span>`);
+        getExplorerLink(data.transaction.id).then(link => {
+          if(link) addLine('🔗', `<a href="${link}" target="_blank" rel="noopener" style="color:var(--blue);">View on Arc Explorer ↗</a>`);
+        });
         setStatus('settled','accepted');
         toast('Payment settled on Arc testnet','ok');
         history.push(entry); renderHistory();
