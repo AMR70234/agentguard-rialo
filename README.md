@@ -78,6 +78,16 @@ LATCH_URL=
 LATCH_TOKEN=
 LATCH_ID=
 
+## Latch integration status
+
+**OpenAI access: fully integrated and live.** Every AI call in this project (`task.js`) goes through a Latch-scoped token instead of a raw OpenAI API key. Verified end-to-end: the policy blocks non-conforming requests (wrong endpoint, wrong model, oversized `max_tokens`), and every call is logged in Latch's activity feed.
+
+**Circle/USDC access: policy created and live, but NOT yet wired into the code.** A second Latch (`AgentGuard-Circle`) is active with a 7-filter policy scoping `/v1/w3s/developer/transactions/transfer` (max 10 USDC per transfer, $5/day spend cap, 2 req/min rate limit, full logging). However, actual USDC transfers in this project still go directly through the Circle SDK, not through this Latch.
+
+**Why it's not connected yet:** Circle's transfer endpoint requires an `entitySecretCiphertext` — a value encrypted client-side, per request, using the entity's public key, via Circle's official SDK. This isn't a static credential we can simply hand to a proxy; recreating that encryption manually outside Circle's SDK would mean reimplementing security-sensitive cryptographic logic by hand, which carries real risk of getting subtly wrong. We've flagged this to the Latch team to see if there's a supported pattern for proxying APIs with client-side-generated request material.
+
+**Bottom line:** the AI layer is protected by an independent, scoped credential today. The USDC layer — arguably the higher-value target — has a ready policy waiting for a safe integration path, not yet a live one.
+
 ## What's next
 
 - Extend Latch scoping to the Circle/USDC API itself, not just the AI layer — this is the higher-value security target, since it governs the agent's actual spending authority rather than its AI usage.
