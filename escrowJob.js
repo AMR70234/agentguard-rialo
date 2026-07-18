@@ -1,13 +1,28 @@
 require('dotenv').config();
-const client = require('./circleClient');
+const { latchCreateTransaction } = require('./latchCircleClient');
 const { executeTask } = require('./task');
 const { recordJob } = require('./reputation');
 
 const USDC_TOKEN_ID = 'ef87c8c3-85de-598a-af50-c5135eecfa74';
-const DISPUTE_WINDOW_MS = 8000; // 8 seconds to dispute before auto-release
+const DISPUTE_WINDOW_MS = 8000;
 
-// In-memory store of pending jobs awaiting the dispute window
 const pendingJobs = new Map();
+
+const DAILY_USDC_LIMIT = 20;
+let dailySpend = { date: new Date().toDateString(), total: 0 };
+
+function checkAndRecordDailySpend(amount) {
+  const today = new Date().toDateString();
+  if (dailySpend.date !== today) {
+    dailySpend = { date: today, total: 0 };
+  }
+  const amountNum = parseFloat(amount);
+  if (dailySpend.total + amountNum > DAILY_USDC_LIMIT) {
+    return { allowed: false, remaining: Math.max(0, DAILY_USDC_LIMIT - dailySpend.total).toFixed(2) };
+  }
+  dailySpend.total += amountNum;
+  return { allowed: true, remaining: (DAILY_USDC_LIMIT - dailySpend.total).toFixed(2) };
+}
 
 function calculatePrice(inputText) {
   const wordCount = inputText.trim().split(/\s+/).length;
@@ -16,27 +31,39 @@ function calculatePrice(inputText) {
   return '2';
 }
 
+// All USDC transfers now go through Latch's policy-enforced proxy for Circle,
+// instead of calling Circle directly. Every transfer is checked against:
+// endpoint allowlist, POST-only, max 10 USDC per transfer, daily spend cap, rate limit.
 async function transferUSDC(fromWalletId, toAddress, amount) {
-  const response = await client.createTransaction({
+  const response = await latchCreateTransaction({
     walletId: fromWalletId,
     tokenId: USDC_TOKEN_ID,
     destinationAddress: toAddress,
-    amount: [String(amount)],
-    fee: {
-      type: 'level',
-      config: { feeLevel: 'MEDIUM' },
-    },
+    amount,
   });
-  return response.data;
+  return { id: response.data.id, state: response.data.state };
 }
 
-// Step 1: escrow the fee and execute the task. If accepted, DO NOT release yet —
-// schedule an automatic release after the dispute window, unless disputed first.
 async function runEscrowJob(taskInput, amount) {
   if (!amount) amount = calculatePrice(taskInput);
+
+  const spendCheck = checkAndRecordDailySpend(amount);
+  if (!spendCheck.allowed) {
+    console.log(`🚫 Daily USDC limit reached ($${DAILY_USDC_LIMIT}/day). Remaining: $${spendCheck.remaining}`);
+    return {
+      accepted: false,
+      disputable: false,
+      summary: `Daily spend limit of ${DAILY_USDC_LIMIT} USDC reached. Try again tomorrow.`,
+      taskType: 'blocked',
+      amount,
+      finalTx: null,
+      stats: null,
+    };
+  }
+
   const log = [];
 
-  log.push(`💰 Escrowing ${amount} USDC from client...`);
+  log.push(`💰 Escrowing ${amount} USDC from client (via Latch)...`);
   const escrowTx = await transferUSDC(
     process.env.WALLET_ID,
     process.env.ESCROW_WALLET_ADDRESS,
@@ -53,16 +80,11 @@ async function runEscrowJob(taskInput, amount) {
   if (taskResult.accepted) {
     log.push(`✅ Task accepted — entering ${DISPUTE_WINDOW_MS / 1000}s dispute window before release...`);
 
-    pendingJobs.set(jobId, {
-      status: 'pending',
-      amount,
-      taskResult,
-    });
+    pendingJobs.set(jobId, { status: 'pending', amount, taskResult });
 
-    // Schedule auto-release after the dispute window, unless disputed
     const timer = setTimeout(async () => {
       const job = pendingJobs.get(jobId);
-      if (!job || job.status !== 'pending') return; // already disputed or resolved
+      if (!job || job.status !== 'pending') return;
 
       try {
         const finalTx = await transferUSDC(
@@ -73,7 +95,7 @@ async function runEscrowJob(taskInput, amount) {
         job.status = 'released';
         job.finalTx = finalTx;
         recordJob(true);
-        console.log(`✅ Auto-released job ${jobId}: ${finalTx.id} (${finalTx.state})`);
+        console.log(`✅ Auto-released job ${jobId} (via Latch): ${finalTx.id} (${finalTx.state})`);
       } catch (err) {
         console.error(`❌ Auto-release failed for job ${jobId}:`, err.message);
       }
@@ -92,10 +114,10 @@ async function runEscrowJob(taskInput, amount) {
       amount,
       escrowTx,
       disputeWindowMs: DISPUTE_WINDOW_MS,
-      stats: recordJob.getStatsOnly ? null : undefined,
+      stats: undefined,
     };
   } else {
-    log.push(`❌ Task rejected — refunding client...`);
+    log.push(`❌ Task rejected — refunding client (via Latch)...`);
     const finalTx = await transferUSDC(
       process.env.ESCROW_WALLET_ID,
       process.env.WALLET_ADDRESS,
@@ -119,7 +141,6 @@ async function runEscrowJob(taskInput, amount) {
   }
 }
 
-// Called when the client disputes a pending job BEFORE the auto-release timer fires.
 async function disputeJob(jobId) {
   const job = pendingJobs.get(jobId);
   if (!job) return { ok: false, error: 'Job not found or already resolved' };
@@ -128,7 +149,6 @@ async function disputeJob(jobId) {
   clearTimeout(job.timer);
   job.status = 'disputed';
 
-  // Refund the client since the job was disputed
   const finalTx = await transferUSDC(
     process.env.ESCROW_WALLET_ID,
     process.env.WALLET_ADDRESS,
@@ -138,23 +158,19 @@ async function disputeJob(jobId) {
   job.finalTx = finalTx;
   recordJob(false);
 
-  console.log(`⚠️ Job ${jobId} disputed — refunded to client: ${finalTx.id}`);
+  console.log(`⚠️ Job ${jobId} disputed — refunded to client (via Latch): ${finalTx.id}`);
   return { ok: true, status: 'refunded', finalTx };
 }
 
-// Poll the status of a pending/resolved job (used by the frontend to show final state)
 function getJobStatus(jobId) {
   const job = pendingJobs.get(jobId);
   if (!job) return { status: 'unknown' };
-  return {
-    status: job.status,
-    finalTx: job.finalTx || null,
-  };
+  return { status: job.status, finalTx: job.finalTx || null };
 }
 
 module.exports = { runEscrowJob, disputeJob, getJobStatus, calculatePrice };
 
 if (require.main === module) {
-  const sampleText = "Arc is a Layer-1 blockchain built by Circle specifically for stablecoin finance. It uses USDC as the native gas token, offers sub-second transaction finality, and provides a full developer platform for building payment applications, DeFi products, and autonomous AI agents that can transact value in real time without human intervention.";
+  const sampleText = "Arc is a Layer-1 blockchain built by Circle specifically for stablecoin finance.";
   runEscrowJob(sampleText).then(r => console.log('\nFinal result:', r));
 }

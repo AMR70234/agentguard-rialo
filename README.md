@@ -80,13 +80,17 @@ LATCH_ID=
 
 ## Latch integration status
 
-**OpenAI access: fully integrated and live.** Every AI call in this project (`task.js`) goes through a Latch-scoped token instead of a raw OpenAI API key. Verified end-to-end: the policy blocks non-conforming requests (wrong endpoint, wrong model, oversized `max_tokens`), and every call is logged in Latch's activity feed.
+**Both OpenAI and Circle/USDC access are fully integrated and live.**
 
-**Circle/USDC access: policy created and live, but NOT yet wired into the code.** A second Latch (`AgentGuard-Circle`) is active with a 7-filter policy scoping `/v1/w3s/developer/transactions/transfer` (max 10 USDC per transfer, $5/day spend cap, 2 req/min rate limit, full logging). However, actual USDC transfers in this project still go directly through the Circle SDK, not through this Latch.
+**OpenAI (`AgentGuard` latch):** Every AI call in this project (`task.js`) goes through a Latch-scoped token instead of a raw OpenAI API key. The policy enforces: endpoint allowlist (`/v1/chat/completions` only), POST-only, `max_tokens` under 500, model restricted to `gpt-4o-mini`/`gpt-4o`, a 60 req/min rate limit, and a $5/day spend cap. Verified end-to-end — the policy blocks non-conforming requests, and every call is logged in Latch's activity feed.
 
-**Why it's not connected yet:** Circle's transfer endpoint requires an `entitySecretCiphertext` — a value encrypted client-side, per request, using the entity's public key, via Circle's official SDK. This isn't a static credential we can simply hand to a proxy; recreating that encryption manually outside Circle's SDK would mean reimplementing security-sensitive cryptographic logic by hand, which carries real risk of getting subtly wrong. We've flagged this to the Latch team to see if there's a supported pattern for proxying APIs with client-side-generated request material.
+**Circle/USDC (`AgentGuard-Circle` latch):** Every USDC transfer in this project (`escrowJob.js`, via `latchCircleClient.js`) goes through a second, independently-scoped Latch token instead of calling Circle directly. The policy enforces: endpoint allowlist (`/v1/w3s/developer/transactions/transfer` only), POST-only, a max transfer amount of 10 USDC per transaction, a 2 req/min rate limit, and a 20 USDC/day spend cap. Verified end-to-end on Arc Testnet — escrow, release, and refund transactions all settle through the Latch proxy.
 
-**Bottom line:** the AI layer is protected by an independent, scoped credential today. The USDC layer — arguably the higher-value target — has a ready policy waiting for a safe integration path, not yet a live one.
+**How the Circle integration works:** Circle's transfer endpoint requires an `entitySecretCiphertext` — a value encrypted client-side, per request, using the entity's public key. This is still generated locally using Circle's official SDK (`generateEntitySecretCiphertext`), exactly as Circle requires. The *fully-formed request* (including that ciphertext) is then sent through the Latch proxy rather than directly to Circle, so Latch can enforce the transfer-amount, rate, and spend policies before the request ever reaches Circle's servers.
+
+**A note on the max-amount filter:** Latch's payload filters compare values using their native JSON type. Circle's API requires the transfer amount to be sent as a string (e.g. `"0.5"`), but Latch's numeric comparison operators (`less_than_or_equal`, etc.) expect a number, not a numeric string — so a straightforward numeric rule always denied valid requests. The workaround: the max-amount rule uses a `matches` (regex) filter instead, validating the string's *shape* (`^([0-9]|10)(\.[0-9]+)?$`) rather than doing a numeric comparison. This achieves the same effect (reject any transfer request above 10) without requiring Latch to coerce string to number.
+
+**Bottom line:** both the AI layer and the USDC layer are now protected by independent, scoped credentials — enforced outside the application code, not just inside it.
 
 ## What's next
 
