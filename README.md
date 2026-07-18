@@ -10,14 +10,7 @@ AgentGuard demonstrates how a client agent and a worker agent can transact USDC 
 2. **Stale-fact rejection** — Answers about time-sensitive facts (current officeholders, prices, recent events) are rejected unless they include an explicit caveat that the information may be outdated.
 3. **Dispute window** — Accepted jobs aren't released instantly. Funds sit in escrow for a short window during which the client can dispute the result and get refunded before the automatic release fires.
 4. **Explorer links** — Every settled transaction surfaces a direct link to view it on the Arc block explorer.
-5. **Latch-secured AI access** — The worker agent never holds a raw OpenAI API key. Instead, it calls a scoped Latch token that enforces, at the network edge, before the request ever reaches OpenAI:
-   - Endpoint allowlist (`/v1/chat/completions` only)
-   - Method restriction (POST only)
-   - `max_tokens` capped under 500
-   - Model restricted to `gpt-4o-mini` / `gpt-4o`
-   - Rate limit: 60 requests/minute
-   - Daily spend cap: $5
-   - Full request logging for audit
+5. **Latch-secured access to both OpenAI and Circle** — The agent never holds raw OpenAI or Circle credentials directly in its request path. Instead, both AI calls and USDC transfers go through separate, independently-scoped Latch tokens that enforce policy at the network edge, before the request ever reaches OpenAI or Circle. See "Latch integration status" below for the full breakdown of both policies.
 
 ## Why this matters
 
@@ -94,7 +87,7 @@ LATCH_ID=
 
 ## What's next
 
-- Extend Latch scoping to the Circle/USDC API itself, not just the AI layer — this is the higher-value security target, since it governs the agent's actual spending authority rather than its AI usage.
+- Add per-user or per-session daily spend tracking (currently the daily cap is shared globally across all usage — see "Known limitation" above).
 - Move escrow and dispute logic on-chain into a smart contract.
 - Add on-chain, portable agent reputation (ERC-8004-style) instead of local storage.
 - Support a real arbitrator (human or independent model) for disputed jobs, instead of an automatic refund.
