@@ -128,6 +128,10 @@
     .flow{flex-direction:row;min-height:24px;}
     .stats-row{grid-template-columns:1fr;}
   }
+  .latch-banner{background:var(--panel);border:1px solid var(--blue);border-radius:12px;padding:18px 20px;margin:24px 0;display:flex;gap:14px;align-items:flex-start;}
+  .latch-icon{font-size:20px;line-height:1;}
+  .latch-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:#fff;margin-bottom:6px;}
+  .latch-desc{font-family:'Inter',sans-serif;font-size:12.5px;color:var(--muted);line-height:1.55;}
 </style>
 </head>
 <body>
@@ -145,6 +149,14 @@
     <div class="eyebrow">ESCROW-BACKED · AUTO-CLASSIFIED · USDC NATIVE GAS</div>
     <h1>Two agents. One <span>ledger</span>.<br/>Settlement without a human in the loop.</h1>
     <p class="sub">A client agent escrows a fee. A worker agent classifies the task, executes it, and gets paid — or refunded — the instant the result is verified on Arc.</p>
+
+    <div class="latch-banner">
+      <div class="latch-icon">🔒</div>
+      <div>
+        <div class="latch-title">Protected by Latch</div>
+        <div class="latch-desc">Every call this agent makes — to OpenAI for AI processing, and to Circle for USDC transfers — is routed through an independently-scoped Latch policy, not a raw API key. Latch enforces spend limits, transaction caps, and rate limits before the request ever reaches OpenAI or Circle.</div>
+      </div>
+    </div>
   </header>
 
   <div class="stats-row">
