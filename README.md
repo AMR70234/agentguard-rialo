@@ -20,11 +20,21 @@ A payment system that lets an agent spend real USDC needs more than "it usually 
 - **Credential blast radius** — if the AI credential were ever leaked or misused, an unscoped key has no limit. A Latch-scoped token limits the damage to a small, auditable, rate-limited, spend-capped slice of access.
 
 ## Architecture
-Client Agent ──escrow──▶ Escrow Wallet ──dispute window (8s)──▶ Worker Agent (release)
-│                                     │
-└── refund (disputed or rejected) ◀────┘
+Client Agent ──escrow (via Latch-Circle)──▶ Escrow Wallet
+                                                    │
+                                          dispute window (8s)
+                                                    │
+                        ┌───────────────────────────┴───────────────────────────┐
+                        ▼                                                       ▼
+        release (via Latch-Circle)                              refund (via Latch-Circle)
+        ──▶ Worker Agent                                          ──▶ Client Agent
+                                                                  (disputed or rejected)
+
 Worker Agent's AI calls:
-task.js ──▶ latchClient.js ──▶ Latch proxy (policy-enforced) ──▶ OpenAI
+  task.js ──▶ latchClient.js ──▶ Latch proxy (AgentGuard policy) ──▶ OpenAI
+
+All USDC transfers:
+  escrowJob.js ──▶ latchCircleClient.js ──▶ Latch proxy (AgentGuard-Circle policy) ──▶ Circle
 
 ## Tech stack
 
