@@ -91,6 +91,19 @@ app.post('/admin/resolve', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /admin/audit-log — view every past arbitration decision (who decided what, and when)
+app.get('/admin/audit-log', requireAdmin, async (req, res) => {
+  try {
+    const readRes = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_AUDIT_BIN_ID}/latest`, {
+      headers: { 'X-Master-Key': process.env.JSONBIN_API_KEY },
+    });
+    const readData = await readRes.json();
+    res.json(readData.record && readData.record.decisions ? readData.record.decisions : []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /job-status/:jobId — poll the current status of a job
 app.get('/job-status/:jobId', (req, res) => {
   const status = getJobStatus(req.params.jobId);

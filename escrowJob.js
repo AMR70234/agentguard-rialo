@@ -7,6 +7,41 @@ const USDC_TOKEN_ID = 'ef87c8c3-85de-598a-af50-c5135eecfa74';
 const DISPUTE_WINDOW_MS = 8000;
 const pendingJobs = new Map();
 
+const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
+const JSONBIN_AUDIT_BIN_ID = process.env.JSONBIN_AUDIT_BIN_ID;
+const JSONBIN_AUDIT_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_AUDIT_BIN_ID}`;
+
+// Logs every human arbitration decision externally (who decided what, and when)
+// so the resolution process itself is reviewable, not just the outcome.
+async function logArbitrationDecision(jobId, decision, amount, taskType) {
+  try {
+    const readRes = await fetch(`${JSONBIN_AUDIT_URL}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_API_KEY },
+    });
+    const readData = await readRes.json();
+    const log = (readData.record && readData.record.decisions) ? readData.record.decisions : [];
+
+    log.push({
+      jobId,
+      decision,
+      amount,
+      taskType,
+      decidedAt: new Date().toISOString(),
+    });
+
+    await fetch(JSONBIN_AUDIT_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_API_KEY,
+      },
+      body: JSON.stringify({ decisions: log }),
+    });
+  } catch (err) {
+    console.error('Could not log arbitration decision:', err.message);
+  }
+}
+
 const DAILY_USDC_LIMIT = 20;
 let dailySpend = { date: new Date().toDateString(), total: 0 };
 
@@ -181,6 +216,7 @@ async function resolveArbitration(jobId, decision) {
     job.status = 'released';
     job.finalTx = finalTx;
     await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
+    await logArbitrationDecision(jobId, 'release', job.amount, job.taskResult && job.taskResult.taskType);
     console.log(`Arbitration on job ${jobId}: RELEASED to worker (via Latch): ${finalTx.id}`);
     return { ok: true, status: 'released', finalTx };
   } else if (decision === 'refund') {
@@ -192,6 +228,7 @@ async function resolveArbitration(jobId, decision) {
     job.status = 'refunded';
     job.finalTx = finalTx;
     await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
+    await logArbitrationDecision(jobId, 'refund', job.amount, job.taskResult && job.taskResult.taskType);
     console.log(`Arbitration on job ${jobId}: REFUNDED to client (via Latch): ${finalTx.id}`);
     return { ok: true, status: 'refunded', finalTx };
   } else {
