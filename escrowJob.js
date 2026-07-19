@@ -94,7 +94,7 @@ async function runEscrowJob(taskInput, amount) {
         );
         job.status = 'released';
         job.finalTx = finalTx;
-        recordJob(true);
+        await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
         console.log(`✅ Auto-released job ${jobId} (via Latch): ${finalTx.id} (${finalTx.state})`);
       } catch (err) {
         console.error(`❌ Auto-release failed for job ${jobId}:`, err.message);
@@ -125,7 +125,7 @@ async function runEscrowJob(taskInput, amount) {
     );
     log.push(`✅ Refund transaction: ${finalTx.id} (${finalTx.state})`);
 
-    const stats = recordJob(false);
+    const stats = await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
     log.push(`📊 Worker stats: ${stats.accepted}/${stats.totalJobs} accepted (${stats.acceptanceRate}%)`);
     log.forEach(line => console.log(line));
 
@@ -156,7 +156,7 @@ async function disputeJob(jobId) {
   );
   job.status = 'refunded';
   job.finalTx = finalTx;
-  recordJob(false);
+  await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
 
   console.log(`⚠️ Job ${jobId} disputed — refunded to client (via Latch): ${finalTx.id}`);
   return { ok: true, status: 'refunded', finalTx };

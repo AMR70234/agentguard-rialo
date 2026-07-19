@@ -107,8 +107,8 @@ app.get('/balances', async (req, res) => {
 });
 
 // GET /reputation
-app.get('/reputation', (req, res) => {
-  res.json(getStats());
+app.get('/reputation', async (req, res) => {
+  res.json(await getStats());
 });
 
 const PORT = process.env.PORT || 3002;

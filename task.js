@@ -59,11 +59,18 @@ Respond with only YES (passes both rules) or NO (fails either rule).`,
   return result.trim().toUpperCase().startsWith('YES');
 }
 
+const RIALO_CONTEXT = `Background knowledge about Rialo (use this if the question is about Rialo, Subzero Labs, Latch, or SCALE):
+Rialo is a developer-first Layer-1 blockchain built by Subzero Labs, built to be "the best blockchain for the agent economy." It features native webcalls (letting on-chain programs communicate directly with AI agents, including via Google's Agent2Agent/A2A protocol), native timers (for automatic on-chain deadline enforcement), and fast finality. Subzero Labs was founded by Ade Adepoju and Lu Zhang, former Mysten Labs engineers who worked on Sui; contributors include alumni from Meta, Netflix, Google, Amazon, and Solana. The company raised a $20M seed round led by Pantera Capital, with Coinbase Ventures, Susquehanna, and Mysten Labs also participating. Backers and partners include Nasdaq, CBOE, and NYSE.
+
+Rialo introduced SCALE (Simple Contracts for Agent Labor Execution), inspired by the YC SAFE Note: a standard on-chain contract for paying AI agents to do tasks. A requester mints a SCALE task specifying a prompt, a payment amount, a deadline, and a third-party judge agent. Payment is escrowed automatically on-chain; if the worker agent misses the deadline, native timers trigger an automatic refund; if the worker delivers, a judge agent evaluates the work on-chain and either releases payment or triggers a refund. Rialo demoed this with a Twitter agent called @chunliweb3 that outsources image generation via SCALE.
+
+Latch (onlatch.com) is also a Subzero Labs product: a policy-enforcement proxy that lets AI agents use scoped, revocable access tokens instead of raw API keys, enforcing spend limits, rate limits, and endpoint restrictions before a request reaches the real service (e.g. OpenAI or Circle).`;
+
 async function doQA(inputText) {
   const result = await latchChatCompletion([
     {
       role: 'system',
-      content: 'Answer the question directly and concisely, in the SAME language as the question, in one or two sentences. If you genuinely cannot answer, say so clearly and briefly. If the question is about something that changes over time (current officeholders, prices, rankings, recent events), you MUST include a brief caveat that your information may be outdated.',
+      content: `Answer the question directly and concisely, in the SAME language as the question, in one or two sentences. If you genuinely cannot answer, say so clearly and briefly. If the question is about something that changes over time (current officeholders, prices, rankings, recent events), you MUST include a brief caveat that your information may be outdated.\n\n${RIALO_CONTEXT}`,
     },
     { role: 'user', content: inputText },
   ], { model: 'gpt-4o-mini', max_tokens: 150 });
