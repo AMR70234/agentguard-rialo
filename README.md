@@ -81,6 +81,12 @@ LATCH_URL=
 LATCH_TOKEN=
 LATCH_ID=
 
+## Recent additions
+
+**Persistent, wallet-linked reputation.** Worker reputation is no longer a single global counter that resets on every redeploy. It's now keyed by the worker's wallet address and stored externally (via JSONBin), so it survives Render restarts and, if the project ever supports multiple worker agents, each one accumulates its own independent track record instead of sharing one pool.
+
+**Rialo/SCALE domain knowledge.** The QA task handler now has accurate background on Rialo, Subzero Labs, Latch, and SCALE (Simple Contracts for Agent Labor Execution) — Rialo's own on-chain framework for paying AI agents, which uses escrow, a judge agent, and automatic refunds on missed deadlines. Notably, AgentGuard's escrow → verify → release/refund flow independently converges on a similar pattern to SCALE, built off-chain on Arc/Circle instead.
+
 ## Latch integration status
 
 **Both OpenAI and Circle/USDC access are fully integrated and live.**
