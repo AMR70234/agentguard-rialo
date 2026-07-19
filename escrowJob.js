@@ -5,7 +5,6 @@ const { recordJob } = require('./reputation');
 
 const USDC_TOKEN_ID = 'ef87c8c3-85de-598a-af50-c5135eecfa74';
 const DISPUTE_WINDOW_MS = 8000;
-
 const pendingJobs = new Map();
 
 const DAILY_USDC_LIMIT = 20;
@@ -31,9 +30,6 @@ function calculatePrice(inputText) {
   return '2';
 }
 
-// All USDC transfers now go through Latch's policy-enforced proxy for Circle,
-// instead of calling Circle directly. Every transfer is checked against:
-// endpoint allowlist, POST-only, max 10 USDC per transfer, daily spend cap, rate limit.
 async function transferUSDC(fromWalletId, toAddress, amount) {
   const response = await latchCreateTransaction({
     walletId: fromWalletId,
@@ -49,7 +45,7 @@ async function runEscrowJob(taskInput, amount) {
 
   const spendCheck = checkAndRecordDailySpend(amount);
   if (!spendCheck.allowed) {
-    console.log(`🚫 Daily USDC limit reached ($${DAILY_USDC_LIMIT}/day). Remaining: $${spendCheck.remaining}`);
+    console.log(`Daily USDC limit reached ($${DAILY_USDC_LIMIT}/day). Remaining: $${spendCheck.remaining}`);
     return {
       accepted: false,
       disputable: false,
@@ -63,22 +59,22 @@ async function runEscrowJob(taskInput, amount) {
 
   const log = [];
 
-  log.push(`💰 Escrowing ${amount} USDC from client (via Latch)...`);
+  log.push(`Escrowing ${amount} USDC from client (via Latch)...`);
   const escrowTx = await transferUSDC(
     process.env.WALLET_ID,
     process.env.ESCROW_WALLET_ADDRESS,
     amount
   );
-  log.push(`✅ Escrow transaction: ${escrowTx.id} (${escrowTx.state})`);
+  log.push(`Escrow transaction: ${escrowTx.id} (${escrowTx.state})`);
 
-  log.push(`🤖 Worker agent executing task...`);
+  log.push(`Worker agent executing task...`);
   const taskResult = await executeTask(taskInput);
-  log.push(`📄 Result: "${taskResult.result}"`);
+  log.push(`Result: "${taskResult.result}"`);
 
   const jobId = escrowTx.id;
 
   if (taskResult.accepted) {
-    log.push(`✅ Task accepted — entering ${DISPUTE_WINDOW_MS / 1000}s dispute window before release...`);
+    log.push(`Task accepted — entering ${DISPUTE_WINDOW_MS / 1000}s dispute window before release...`);
 
     pendingJobs.set(jobId, { status: 'pending', amount, taskResult });
 
@@ -95,9 +91,9 @@ async function runEscrowJob(taskInput, amount) {
         job.status = 'released';
         job.finalTx = finalTx;
         await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
-        console.log(`✅ Auto-released job ${jobId} (via Latch): ${finalTx.id} (${finalTx.state})`);
+        console.log(`Auto-released job ${jobId} (via Latch): ${finalTx.id} (${finalTx.state})`);
       } catch (err) {
-        console.error(`❌ Auto-release failed for job ${jobId}:`, err.message);
+        console.error(`Auto-release failed for job ${jobId}:`, err.message);
       }
     }, DISPUTE_WINDOW_MS);
 
@@ -117,16 +113,16 @@ async function runEscrowJob(taskInput, amount) {
       stats: undefined,
     };
   } else {
-    log.push(`❌ Task rejected — refunding client (via Latch)...`);
+    log.push(`Task rejected — refunding client (via Latch)...`);
     const finalTx = await transferUSDC(
       process.env.ESCROW_WALLET_ID,
       process.env.WALLET_ADDRESS,
       amount
     );
-    log.push(`✅ Refund transaction: ${finalTx.id} (${finalTx.state})`);
+    log.push(`Refund transaction: ${finalTx.id} (${finalTx.state})`);
 
     const stats = await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
-    log.push(`📊 Worker stats: ${stats.accepted}/${stats.totalJobs} accepted (${stats.acceptanceRate}%)`);
+    log.push(`Worker stats: ${stats.accepted}/${stats.totalJobs} accepted (${stats.acceptanceRate}%)`);
     log.forEach(line => console.log(line));
 
     return {
@@ -141,25 +137,66 @@ async function runEscrowJob(taskInput, amount) {
   }
 }
 
+// A dispute no longer auto-refunds. It freezes the job and queues it for
+// human arbitration instead — funds stay in escrow until an admin decides.
 async function disputeJob(jobId) {
   const job = pendingJobs.get(jobId);
   if (!job) return { ok: false, error: 'Job not found or already resolved' };
   if (job.status !== 'pending') return { ok: false, error: `Job already ${job.status}` };
 
   clearTimeout(job.timer);
-  job.status = 'disputed';
+  job.status = 'awaiting_arbitration';
+  console.log(`Job ${jobId} disputed — frozen in escrow, awaiting human arbitration.`);
+  return { ok: true, status: 'awaiting_arbitration' };
+}
 
-  const finalTx = await transferUSDC(
-    process.env.ESCROW_WALLET_ID,
-    process.env.WALLET_ADDRESS,
-    job.amount
-  );
-  job.status = 'refunded';
-  job.finalTx = finalTx;
-  await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
+// Returns every job currently frozen and waiting for an admin decision.
+function listPendingArbitration() {
+  const list = [];
+  for (const [jobId, job] of pendingJobs.entries()) {
+    if (job.status === 'awaiting_arbitration') {
+      list.push({
+        jobId,
+        amount: job.amount,
+        taskType: job.taskResult && job.taskResult.taskType,
+        result: job.taskResult && job.taskResult.result,
+      });
+    }
+  }
+  return list;
+}
 
-  console.log(`⚠️ Job ${jobId} disputed — refunded to client (via Latch): ${finalTx.id}`);
-  return { ok: true, status: 'refunded', finalTx };
+// Human arbitrator's decision: either release to the worker, or refund the client.
+async function resolveArbitration(jobId, decision) {
+  const job = pendingJobs.get(jobId);
+  if (!job) return { ok: false, error: 'Job not found or already resolved' };
+  if (job.status !== 'awaiting_arbitration') return { ok: false, error: `Job is not awaiting arbitration (status: ${job.status})` };
+
+  if (decision === 'release') {
+    const finalTx = await transferUSDC(
+      process.env.ESCROW_WALLET_ID,
+      process.env.WORKER_WALLET_ADDRESS,
+      job.amount
+    );
+    job.status = 'released';
+    job.finalTx = finalTx;
+    await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
+    console.log(`Arbitration on job ${jobId}: RELEASED to worker (via Latch): ${finalTx.id}`);
+    return { ok: true, status: 'released', finalTx };
+  } else if (decision === 'refund') {
+    const finalTx = await transferUSDC(
+      process.env.ESCROW_WALLET_ID,
+      process.env.WALLET_ADDRESS,
+      job.amount
+    );
+    job.status = 'refunded';
+    job.finalTx = finalTx;
+    await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
+    console.log(`Arbitration on job ${jobId}: REFUNDED to client (via Latch): ${finalTx.id}`);
+    return { ok: true, status: 'refunded', finalTx };
+  } else {
+    return { ok: false, error: 'decision must be "release" or "refund"' };
+  }
 }
 
 function getJobStatus(jobId) {
@@ -168,7 +205,7 @@ function getJobStatus(jobId) {
   return { status: job.status, finalTx: job.finalTx || null };
 }
 
-module.exports = { runEscrowJob, disputeJob, getJobStatus, calculatePrice };
+module.exports = { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration, calculatePrice };
 
 if (require.main === module) {
   const sampleText = "Arc is a Layer-1 blockchain built by Circle specifically for stablecoin finance.";

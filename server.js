@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const client = require('./circleClient');
-const { runEscrowJob, disputeJob, getJobStatus } = require('./escrowJob');
+const { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration } = require('./escrowJob');
 const { getStats } = require('./reputation');
 
 const app = express();
@@ -55,6 +55,27 @@ app.post('/dispute', async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('❌ Error in /dispute:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /admin/disputes — list all jobs currently frozen and awaiting human arbitration
+app.get('/admin/disputes', (req, res) => {
+  res.json(listPendingArbitration());
+});
+
+// POST /admin/resolve — human arbitrator's decision: { jobId, decision: "release" | "refund" }
+app.post('/admin/resolve', async (req, res) => {
+  const { jobId, decision } = req.body;
+  if (!jobId || !decision) {
+    return res.status(400).json({ error: 'Missing jobId or decision in request body' });
+  }
+  try {
+    const result = await resolveArbitration(jobId, decision);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    return res.json(result);
+  } catch (error) {
+    console.error('Error in /admin/resolve:', error.message);
     return res.status(500).json({ error: error.message });
   }
 });
