@@ -10,6 +10,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Simple auth middleware: protects every /admin/* endpoint with a shared secret.
+// The request must include: Authorization: Bearer <ADMIN_SECRET>
+function requireAdmin(req, res, next) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token || token !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: 'Unauthorized: missing or invalid admin credentials' });
+  }
+  next();
+}
+
 // POST /run-job — classify → escrow → execute → dispute window → release/refund
 app.post('/run-job', async (req, res) => {
   const { taskInput, amount } = req.body;
@@ -60,12 +71,12 @@ app.post('/dispute', async (req, res) => {
 });
 
 // GET /admin/disputes — list all jobs currently frozen and awaiting human arbitration
-app.get('/admin/disputes', (req, res) => {
+app.get('/admin/disputes', requireAdmin, (req, res) => {
   res.json(listPendingArbitration());
 });
 
 // POST /admin/resolve — human arbitrator's decision: { jobId, decision: "release" | "refund" }
-app.post('/admin/resolve', async (req, res) => {
+app.post('/admin/resolve', requireAdmin, async (req, res) => {
   const { jobId, decision } = req.body;
   if (!jobId || !decision) {
     return res.status(400).json({ error: 'Missing jobId or decision in request body' });
