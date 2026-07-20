@@ -118,12 +118,43 @@ Escrow logic now runs on an actual smart contract deployed on Arc Testnet, inste
 
 **What's still true:** this is an experimental, unaudited contract built as a learning exercise — not reviewed by a professional smart contract auditor, and not intended for production use with real funds. Circle's Developer-Controlled Wallets still sign every on-chain call; deploying via Circle's Smart Contract Platform meant no separate private key was needed.
 
+## Human arbitration, made instant and reviewable
+
+Disputing a job used to trigger an automatic refund by default — trusting the client's claim without question. That's been replaced with a real decision process:
+
+- **Dispute button in the UI.** After a job is accepted, the frontend shows an 8-second countdown with a "Dispute this result" button. Clients no longer need to call the API manually.
+- **AI arbitrator resolves most disputes instantly.** An independent model reviews the disputed job the moment it's raised and decides `release` or `refund` — the system doesn't wait on a human for every case.
+- **Majority voting for consistency.** A single LLM call can occasionally flip its verdict on the exact same input — a known property of language models, not a bug. To reduce this, the arbitrator is called independently three times per dispute, and the majority verdict wins. If the vote ties, the job falls back to manual review instead of guessing.
+- **The arbitration prompt was explicitly tuned and tested** against both failure modes: too lenient (approving vague or cut-off answers) and too strict (rejecting short-but-correct ones). Verified with side-by-side test cases for each.
+- **`/admin.html` — a password-protected dashboard** for the rare case the AI can't reach a majority decision. It lists every job awaiting arbitration and lets an admin resolve it with one click, authenticated with the same secret that protects the underlying `/admin/*` API.
+
+## Domain knowledge: Arc and Rialo, kept current
+
+The QA task handler's background knowledge is sourced from each project's official site/docs, not generic training data, and was expanded today:
+
+- **Arc:** clarified it's built by Circle Technology Services, LLC — not an independent startup with named founders. Added current testnet stats (240M+ transactions, ~1.5M wallets), the mainnet timeline (summer 2026, still an "exploration phase"), the ARC token's supply structure, and institutional partners (Goldman Sachs, Mastercard, Visa).
+- **Rialo:** background on SCALE (Rialo's own on-chain agent-payment framework), the founding team, funding, and Latch.
+
+## Frontend transparency banners
+
+The homepage shows three banners explaining *what* protects each job, not just that it's "protected":
+- **Protected by Latch** — no raw credentials to OpenAI or Circle.
+- **On-chain escrow** — funds are held by the deployed smart contract, with a direct link to view it on Arc Explorer.
+- **Independent verification** — the result is graded by a different model than the one that produced it.
+
+## Known limitations
+
+- **Unaudited contract** — `AgentEscrow.sol` has not been professionally reviewed; not intended for real funds yet.
+- **Fixed arbitrator** — the arbitrator wallet is set at deploy time and cannot be changed without redeploying the contract.
+- **Shared daily limit** — the spend cap is global across all visitors, not per-user or per-session.
+- **Single worker agent** — wallet-linked reputation is ready, but there is only one worker to track today.
+
 ## What's next
 
-- Add per-user or per-session daily spend tracking (currently the daily cap is shared globally across all usage — see "Known limitation" above).
-- Move escrow and dispute logic on-chain into a smart contract.
-- Add on-chain, portable agent reputation (ERC-8004-style) instead of local storage.
-- Support a real arbitrator (human or independent model) for disputed jobs, instead of an automatic refund.
+- Add per-user or per-session daily spend tracking, so a shared demo cannot be exhausted by the first few visitors.
+- Get the smart contract professionally audited before it ever touches real funds.
+- Add a safe way to rotate the arbitrator address without a full contract redeploy.
+- Support multiple worker agents competing for jobs, chosen by price and wallet-tracked reputation.
 
 ## Status
 
