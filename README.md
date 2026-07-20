@@ -1,6 +1,6 @@
 # AgentGuard
 
-**An experimental, security-hardened fork of AgentPay — adding independent AI verification, a dispute window, and Latch-based access control for the AI layer.**
+**An experimental agent payment system with independent AI verification, human arbitration, and Latch-scoped access control for every credential the agent uses.**
 
 AgentGuard demonstrates how a client agent and a worker agent can transact USDC on Arc autonomously, while adding real safeguards around the two weakest points of a naive "agent pays agent" system: the AI judging the work, and the credentials the agent uses to reach that AI.
 
