@@ -156,6 +156,22 @@
         <div class="latch-desc">Every call this agent makes — to OpenAI for AI processing, and to Circle for USDC transfers — is routed through an independently-scoped Latch policy, not a raw API key. Latch enforces spend limits, transaction caps, and rate limits before the request ever reaches OpenAI or Circle.</div>
       </div>
     </div>
+
+    <div class="latch-banner">
+      <div class="latch-icon">⛓️</div>
+      <div>
+        <div class="latch-title">On-chain escrow</div>
+        <div class="latch-desc">Every job's funds are held by a smart contract deployed on Arc Testnet — not just application logic on this server. <a href="https://testnet.arcscan.app/address/0x2460d5713367a3a5befca87363b221d47045d580" target="_blank" rel="noopener" style="color:var(--blue);">View the contract on Arc Explorer ↗</a></div>
+      </div>
+    </div>
+
+    <div class="latch-banner">
+      <div class="latch-icon">⚖️</div>
+      <div>
+        <div class="latch-title">Independent verification</div>
+        <div class="latch-desc">The worker's answer is never graded by the same model that produced it. A separate model independently judges whether the result is genuine before any funds are released.</div>
+      </div>
+    </div>
   </header>
 
   <div class="stats-row">
