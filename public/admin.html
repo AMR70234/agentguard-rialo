@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGuard · Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0D10; --panel:#14181D; --border:#232830; --text:#E8EAED;
+    --muted:#8B93A0; --blue:#2775CA; --green:#22C55E; --red:#EF4444; --amber:#F5A623;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;padding:40px 20px;margin:0;}
+  .wrap{max-width:760px;margin:0 auto;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:24px;margin:0 0 6px;}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 28px;}
+  .login-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:420px;}
+  .login-box input{width:100%;background:#191E24;border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;margin-bottom:12px;}
+  .login-box button, .action-btn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;}
+  .login-box button{background:var(--blue);color:#fff;width:100%;}
+  .job-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px;}
+  .job-id{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);word-break:break-all;margin-bottom:8px;}
+  .job-task{font-size:13.5px;color:var(--text);line-height:1.5;margin-bottom:10px;background:#191E24;border-radius:8px;padding:10px;}
+  .job-meta{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);margin-bottom:14px;}
+  .actions{display:flex;gap:10px;}
+  .release-btn{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.4);}
+  .refund-btn{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.4);}
+  .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:40px 0;}
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px;max-width:320px;}
+  #dashboard{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AgentGuard · Admin</h1>
+  <p class="sub">Review and resolve disputed jobs.</p>
+
+  <div class="login-box" id="loginBox">
+    <input type="password" id="secretInput" placeholder="Admin secret" />
+    <button onclick="login()">Unlock</button>
+  </div>
+
+  <div id="dashboard">
+    <div id="jobList"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+let ADMIN_SECRET = '';
+
+function login(){
+  ADMIN_SECRET = document.getElementById('secretInput').value.trim();
+  if(!ADMIN_SECRET){ return; }
+  document.getElementById('loginBox').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  loadDisputes();
+}
+
+async function loadDisputes(){
+  const list = document.getElementById('jobList');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const res = await fetch(`${API_BASE}/admin/disputes`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_SECRET}` }
+    });
+    if(res.status === 403){
+      list.innerHTML = '<div class="empty">Invalid admin secret.</div>';
+      return;
+    }
+    const jobs = await res.json();
+    if(jobs.length === 0){
+      list.innerHTML = '<div class="empty">No disputed jobs awaiting arbitration.</div>';
+      return;
+    }
+    list.innerHTML = jobs.map(j => `
+      <div class="job-card">
+        <div class="job-id">${j.jobId}</div>
+        <div class="job-task">${j.result || '(no result)'}</div>
+        <div class="job-meta">Type: ${j.taskType || '—'} · Amount: ${j.amount} USDC</div>
+        <div class="actions">
+          <button class="action-btn release-btn" onclick="resolveJob('${j.jobId}','release')">✅ Release to Worker</button>
+          <button class="action-btn refund-btn" onclick="resolveJob('${j.jobId}','refund')">↩️ Refund Client</button>
+        </div>
+      </div>
+    `).join('');
+  }catch(e){
+    list.innerHTML = '<div class="empty">Could not reach the backend.</div>';
+  }
+}
+
+async function resolveJob(jobId, decision){
+  try{
+    const res = await fetch(`${API_BASE}/admin/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ADMIN_SECRET}` },
+      body: JSON.stringify({ jobId, decision }),
+    });
+    const data = await res.json();
+    if(data.ok){
+      loadDisputes();
+    }else{
+      alert(data.error || 'Could not resolve this job.');
+    }
+  }catch(e){
+    alert('Could not reach the backend.');
+  }
+}
+</script>
+</body>
+</html>

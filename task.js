@@ -59,6 +59,15 @@ Respond with only YES (passes both rules) or NO (fails either rule).`,
   return result.trim().toUpperCase().startsWith('YES');
 }
 
+const ARC_CONTEXT = `Background knowledge about Arc (use this if the question is about Arc blockchain):
+Arc is Circle's Layer-1 blockchain, marketed as "the Economic OS for the internet" — a public, sovereign L1 (not an Ethereum Layer-2) purpose-built for stablecoin-native finance. Arc is built and operated by Circle Technology Services, LLC (a Circle Internet Group subsidiary); it is not an independent startup with separate named founders — it is a Circle-developed network. It uses USDC as its native gas token (no separate volatile token needed for fees), offers deterministic sub-second settlement finality, is EVM-compatible, and supports opt-in configurable privacy for compliance. Cross-chain transfers go through Circle's CCTP, and it integrates with Circle Gateway, institutional on/offramps, and Circle Payments Network (CPN).
+
+As of mid-2026: Arc's public testnet launched in October 2025 and has processed over 240 million transactions with roughly 1.5 million active wallets. Weekly testnet activity (per Arc's own site) includes over 15 million transactions, ~2.1 million contracts deployed, and ~25,000 new accounts. Mainnet is planned for summer 2026, though Circle has described the exact timing and native token launch as still in an "exploration phase." A separate ARC token is planned with a 10 billion initial supply (60% ecosystem, 25% Circle, 15% long-term reserves), but it is not live yet — USDC remains the only gas token today.
+
+Institutional partners and early design collaborators cited by Circle include Goldman Sachs, Mastercard, and Visa, exploring programmable settlement, FX workflows, and payment infrastructure on Arc. Key use cases Arc targets: agentic economic activity (autonomous AI agents coordinating and settling value), stablecoin FX (via Circle StableFX), peer-to-peer payments, treasury management, prediction markets, lending/borrowing, asset tokenization, and cross-border payouts. Developer resources are at docs.arc.network, with a testnet faucet at faucet.circle.com and an explorer at testnet.arcscan.app.
+
+`;
+
 const RIALO_CONTEXT = `Background knowledge about Rialo (use this if the question is about Rialo, Subzero Labs, Latch, or SCALE):
 Rialo is a developer-first Layer-1 blockchain built by Subzero Labs, built to be "the best blockchain for the agent economy." It features native webcalls (letting on-chain programs communicate directly with AI agents, including via Google's Agent2Agent/A2A protocol), native timers (for automatic on-chain deadline enforcement), and fast finality. Subzero Labs was founded by Ade Adepoju and Lu Zhang, former Mysten Labs engineers who worked on Sui; contributors include alumni from Meta, Netflix, Google, Amazon, and Solana. The company raised a $20M seed round led by Pantera Capital, with Coinbase Ventures, Susquehanna, and Mysten Labs also participating. Backers and partners include Nasdaq, CBOE, and NYSE.
 
@@ -70,7 +79,7 @@ async function doQA(inputText) {
   const result = await latchChatCompletion([
     {
       role: 'system',
-      content: `Answer the question directly and concisely, in the SAME language as the question, in one or two sentences. If you genuinely cannot answer, say so clearly and briefly. If the question is about something that changes over time (current officeholders, prices, rankings, recent events), you MUST include a brief caveat that your information may be outdated.\n\n${RIALO_CONTEXT}`,
+      content: `Answer the question directly and concisely, in the SAME language as the question, in one or two sentences. If you genuinely cannot answer, say so clearly and briefly. If the question is about something that changes over time (current officeholders, prices, rankings, recent events), you MUST include a brief caveat that your information may be outdated.\n\n${ARC_CONTEXT}\n${RIALO_CONTEXT}`,
     },
     { role: 'user', content: inputText },
   ], { model: 'gpt-4o-mini', max_tokens: 150 });

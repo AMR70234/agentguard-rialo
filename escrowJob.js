@@ -90,7 +90,7 @@ async function runEscrowJob(taskInput, amount) {
   console.log(`Result: "${taskResult.result}"`);
 
   if (taskResult.accepted) {
-    pendingJobs.set(jobId, { status: 'pending', amount, taskResult });
+    pendingJobs.set(jobId, { status: 'pending', amount, taskResult, taskInput });
 
     const timer = setTimeout(async () => {
       const job = pendingJobs.get(jobId);
@@ -154,6 +154,53 @@ async function runEscrowJob(taskInput, amount) {
 }
 
 // Client disputes within the window — freezes the job on-chain for arbitration.
+// AI-based arbitrator: an independent model reviews the disputed job and
+// decides immediately, so the system scales without waiting for a human.
+// Falls back to "awaiting_arbitration" (for manual review via /admin.html)
+// if the AI arbitrator itself fails or can't reach a confident decision.
+async function getSingleVerdict(taskInput, result, taskType) {
+  const { latchChatCompletion } = require('./latchClient');
+  const verdict = await latchChatCompletion([
+    {
+      role: 'system',
+      content: `You are an independent, fair arbitrator for a disputed AI agent job, in any language. Judge whether the workers result genuinely and adequately completes the task — it does not need to be perfect, just complete and coherent. Respond REFUND only if the result is clearly incomplete (cut off mid-sentence), incoherent, completely off-topic, or explicitly admits it could not answer. Respond RELEASE if the result is a reasonable, complete attempt that addresses the task, even if brief. A short but accurate and complete answer or summary should be RELEASE, not REFUND. Respond with only RELEASE or REFUND.`,
+    },
+    {
+      role: 'user',
+      content: `Task type: ${taskType}\nOriginal task: ${taskInput}\nWorker's result: ${result}\n\nShould this be RELEASE or REFUND? Respond with only that one word.`,
+    },
+  ], { model: 'gpt-4o', max_tokens: 5 });
+
+  const decision = verdict.trim().toUpperCase();
+  if (decision.startsWith('RELEASE')) return 'release';
+  if (decision.startsWith('REFUND')) return 'refund';
+  return null;
+}
+
+// Runs the arbitrator 3 times independently and takes the majority verdict,
+// since a single LLM call can occasionally flip its decision on the same input.
+async function aiArbitrate(taskInput, result, taskType) {
+  try {
+    const votes = await Promise.all([
+      getSingleVerdict(taskInput, result, taskType),
+      getSingleVerdict(taskInput, result, taskType),
+      getSingleVerdict(taskInput, result, taskType),
+    ]);
+
+    console.log(`Arbitration votes: [${votes.join(', ')}]`);
+
+    const releaseCount = votes.filter(v => v === 'release').length;
+    const refundCount = votes.filter(v => v === 'refund').length;
+
+    if (releaseCount > refundCount) return 'release';
+    if (refundCount > releaseCount) return 'refund';
+    return null; // tie or all inconclusive — falls back to manual review
+  } catch (err) {
+    console.error('AI arbitration failed:', err.message);
+    return null;
+  }
+}
+
 async function disputeJob(jobId) {
   const job = pendingJobs.get(jobId);
   if (!job) return { ok: false, error: 'Job not found or already resolved' };
@@ -169,7 +216,18 @@ async function disputeJob(jobId) {
 
   job.status = 'awaiting_arbitration';
   console.log(`Job ${jobId} disputed on-chain: ${disputeRes.data.id}`);
-  return { ok: true, status: 'awaiting_arbitration' };
+
+  // Immediately try AI arbitration so the client/worker don't wait on a human
+  const aiDecision = await aiArbitrate(job.taskInput || '', job.taskResult.result, job.taskResult.taskType);
+
+  if (aiDecision) {
+    console.log(`AI arbitrator decided: ${aiDecision} for job ${jobId}`);
+    const result = await resolveArbitration(jobId, aiDecision);
+    return { ok: true, status: result.status, resolvedBy: 'ai', finalTx: result.finalTx };
+  }
+
+  console.log(`AI arbitrator was inconclusive for job ${jobId} — queued for manual review.`);
+  return { ok: true, status: 'awaiting_arbitration', resolvedBy: null };
 }
 
 function listPendingArbitration() {
