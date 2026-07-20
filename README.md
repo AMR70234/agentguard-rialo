@@ -101,6 +101,23 @@ LATCH_ID=
 
 **Bottom line:** both the AI layer and the USDC layer are now protected by independent, scoped credentials — enforced outside the application code, not just inside it.
 
+## On-chain escrow (smart contract)
+
+Escrow logic now runs on an actual smart contract deployed on Arc Testnet, instead of being managed entirely by the application server.
+
+**Contract:** `AgentEscrow.sol` — an experimental, unaudited Solidity contract deployed via Circle's Smart Contract Platform. It implements the same flow as the original off-chain design:
+
+- `createJob(jobId, worker, amount)` — client escrows USDC into the contract itself (via `transferFrom`, requiring a prior `approve`)
+- `dispute(jobId)` — client freezes the job for arbitration within the dispute window
+- `release(jobId)` — anyone can trigger release once the window has passed with no dispute
+- `resolve(jobId, releaseToWorker)` — only the designated arbitrator wallet can resolve a disputed job
+
+**Deployed address:** `0x2460d5713367a3a5befca87363b221d47045d580` (Arc Testnet)
+
+**Why this matters:** previously, if the server hosting this app went down or was compromised, funds sitting in an intermediate escrow wallet had no guaranteed resolution path — everything depended on this server's own logic staying correct and available. Now, the escrow, dispute window, and arbitration rules are enforced by the contract itself, independent of server uptime. The arbitrator is a separate wallet (the escrow wallet) from the client, so a client can't dispute and then "arbitrate" their own claim.
+
+**What's still true:** this is an experimental, unaudited contract built as a learning exercise — not reviewed by a professional smart contract auditor, and not intended for production use with real funds. Circle's Developer-Controlled Wallets still sign every on-chain call; deploying via Circle's Smart Contract Platform meant no separate private key was needed.
+
 ## What's next
 
 - Add per-user or per-session daily spend tracking (currently the daily cap is shared globally across all usage — see "Known limitation" above).

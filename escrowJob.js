@@ -1,46 +1,11 @@
 require('dotenv').config();
-const { latchCreateTransaction } = require('./latchCircleClient');
+const crypto = require('crypto');
+const { callContract } = require('./contractClient');
 const { executeTask } = require('./task');
 const { recordJob } = require('./reputation');
 
-const USDC_TOKEN_ID = 'ef87c8c3-85de-598a-af50-c5135eecfa74';
 const DISPUTE_WINDOW_MS = 8000;
-const pendingJobs = new Map();
-
-const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
-const JSONBIN_AUDIT_BIN_ID = process.env.JSONBIN_AUDIT_BIN_ID;
-const JSONBIN_AUDIT_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_AUDIT_BIN_ID}`;
-
-// Logs every human arbitration decision externally (who decided what, and when)
-// so the resolution process itself is reviewable, not just the outcome.
-async function logArbitrationDecision(jobId, decision, amount, taskType) {
-  try {
-    const readRes = await fetch(`${JSONBIN_AUDIT_URL}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_API_KEY },
-    });
-    const readData = await readRes.json();
-    const log = (readData.record && readData.record.decisions) ? readData.record.decisions : [];
-
-    log.push({
-      jobId,
-      decision,
-      amount,
-      taskType,
-      decidedAt: new Date().toISOString(),
-    });
-
-    await fetch(JSONBIN_AUDIT_URL, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY,
-      },
-      body: JSON.stringify({ decisions: log }),
-    });
-  } catch (err) {
-    console.error('Could not log arbitration decision:', err.message);
-  }
-}
+const pendingJobs = new Map(); // jobId -> { taskResult, amount, timer, status }
 
 const DAILY_USDC_LIMIT = 20;
 let dailySpend = { date: new Date().toDateString(), total: 0 };
@@ -65,22 +30,36 @@ function calculatePrice(inputText) {
   return '2';
 }
 
-async function transferUSDC(fromWalletId, toAddress, amount) {
-  const response = await latchCreateTransaction({
-    walletId: fromWalletId,
-    tokenId: USDC_TOKEN_ID,
-    destinationAddress: toAddress,
-    amount,
-  });
-  return { id: response.data.id, state: response.data.state };
+function toUnits(amount) {
+  return String(Math.round(parseFloat(amount) * 1000000)); // USDC has 6 decimals
 }
 
+function pollTransaction(txId, maxTries = 10) {
+  return new Promise(async (resolve) => {
+    for (let i = 0; i < maxTries; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const res = await fetch(`https://api.circle.com/v1/w3s/transactions/${txId}`, {
+        headers: { 'Authorization': `Bearer ${process.env.CIRCLE_API_KEY}` },
+      });
+      const data = await res.json();
+      const state = data.data.transaction.state;
+      if (state === 'COMPLETE' || state === 'FAILED') {
+        resolve(data.data.transaction);
+        return;
+      }
+    }
+    resolve({ state: 'TIMEOUT' });
+  });
+}
+
+// Escrow now happens on-chain via the AgentEscrow smart contract, instead
+// of a direct Circle transfer. The contract itself enforces the dispute
+// window and holds the funds — not this server.
 async function runEscrowJob(taskInput, amount) {
   if (!amount) amount = calculatePrice(taskInput);
 
   const spendCheck = checkAndRecordDailySpend(amount);
   if (!spendCheck.allowed) {
-    console.log(`Daily USDC limit reached ($${DAILY_USDC_LIMIT}/day). Remaining: $${spendCheck.remaining}`);
     return {
       accepted: false,
       disputable: false,
@@ -92,49 +71,46 @@ async function runEscrowJob(taskInput, amount) {
     };
   }
 
-  const log = [];
+  const jobId = '0x' + crypto.createHash('sha256').update(crypto.randomUUID()).digest('hex');
 
-  log.push(`Escrowing ${amount} USDC from client (via Latch)...`);
-  const escrowTx = await transferUSDC(
-    process.env.WALLET_ID,
-    process.env.ESCROW_WALLET_ADDRESS,
-    amount
-  );
-  log.push(`Escrow transaction: ${escrowTx.id} (${escrowTx.state})`);
+  console.log(`On-chain: creating job ${jobId}, escrowing ${amount} USDC...`);
+  const createRes = await callContract({
+    walletId: process.env.WALLET_ID,
+    abiFunctionSignature: 'createJob(bytes32,address,uint256)',
+    abiParameters: [jobId, process.env.WORKER_WALLET_ADDRESS, toUnits(amount)],
+  });
+  const createTx = await pollTransaction(createRes.data.id);
+  if (createTx.state !== 'COMPLETE') {
+    return { accepted: false, disputable: false, summary: 'On-chain escrow failed.', taskType: 'error', amount, finalTx: null, stats: null };
+  }
+  console.log(`Escrow confirmed on-chain: ${createTx.txHash}`);
 
-  log.push(`Worker agent executing task...`);
+  console.log('Worker agent executing task...');
   const taskResult = await executeTask(taskInput);
-  log.push(`Result: "${taskResult.result}"`);
-
-  const jobId = escrowTx.id;
+  console.log(`Result: "${taskResult.result}"`);
 
   if (taskResult.accepted) {
-    log.push(`Task accepted — entering ${DISPUTE_WINDOW_MS / 1000}s dispute window before release...`);
-
     pendingJobs.set(jobId, { status: 'pending', amount, taskResult });
 
     const timer = setTimeout(async () => {
       const job = pendingJobs.get(jobId);
       if (!job || job.status !== 'pending') return;
-
       try {
-        const finalTx = await transferUSDC(
-          process.env.ESCROW_WALLET_ID,
-          process.env.WORKER_WALLET_ADDRESS,
-          amount
-        );
+        const releaseRes = await callContract({
+          walletId: process.env.WORKER_WALLET_ID,
+          abiFunctionSignature: 'release(bytes32)',
+          abiParameters: [jobId],
+        });
         job.status = 'released';
-        job.finalTx = finalTx;
+        job.finalTx = releaseRes.data;
         await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
-        console.log(`Auto-released job ${jobId} (via Latch): ${finalTx.id} (${finalTx.state})`);
+        console.log(`On-chain auto-release for job ${jobId}: ${releaseRes.data.id}`);
       } catch (err) {
         console.error(`Auto-release failed for job ${jobId}:`, err.message);
       }
     }, DISPUTE_WINDOW_MS);
 
     pendingJobs.get(jobId).timer = timer;
-
-    log.forEach(line => console.log(line));
 
     return {
       accepted: true,
@@ -143,22 +119,27 @@ async function runEscrowJob(taskInput, amount) {
       summary: taskResult.result,
       taskType: taskResult.taskType,
       amount,
-      escrowTx,
+      escrowTx: { id: createRes.data.id, state: createTx.state, txHash: createTx.txHash },
       disputeWindowMs: DISPUTE_WINDOW_MS,
       stats: undefined,
     };
   } else {
-    log.push(`Task rejected — refunding client (via Latch)...`);
-    const finalTx = await transferUSDC(
-      process.env.ESCROW_WALLET_ID,
-      process.env.WALLET_ADDRESS,
-      amount
-    );
-    log.push(`Refund transaction: ${finalTx.id} (${finalTx.state})`);
+    console.log('Task rejected — refunding client on-chain (via dispute + resolve)...');
+    // Since the worker itself rejected the result, we dispute and immediately
+    // resolve in the client's favor using the escrow wallet as arbitrator.
+    await callContract({
+      walletId: process.env.WALLET_ID,
+      abiFunctionSignature: 'dispute(bytes32)',
+      abiParameters: [jobId],
+    });
+    await new Promise(r => setTimeout(r, 3000));
+    const resolveRes = await callContract({
+      walletId: process.env.ESCROW_WALLET_ID,
+      abiFunctionSignature: 'resolve(bytes32,bool)',
+      abiParameters: [jobId, false],
+    });
 
     const stats = await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
-    log.push(`Worker stats: ${stats.accepted}/${stats.totalJobs} accepted (${stats.acceptanceRate}%)`);
-    log.forEach(line => console.log(line));
 
     return {
       accepted: false,
@@ -166,74 +147,62 @@ async function runEscrowJob(taskInput, amount) {
       summary: taskResult.result,
       taskType: taskResult.taskType,
       amount,
-      finalTx,
+      finalTx: resolveRes.data,
       stats,
     };
   }
 }
 
-// A dispute no longer auto-refunds. It freezes the job and queues it for
-// human arbitration instead — funds stay in escrow until an admin decides.
+// Client disputes within the window — freezes the job on-chain for arbitration.
 async function disputeJob(jobId) {
   const job = pendingJobs.get(jobId);
   if (!job) return { ok: false, error: 'Job not found or already resolved' };
   if (job.status !== 'pending') return { ok: false, error: `Job already ${job.status}` };
 
   clearTimeout(job.timer);
+
+  const disputeRes = await callContract({
+    walletId: process.env.WALLET_ID,
+    abiFunctionSignature: 'dispute(bytes32)',
+    abiParameters: [jobId],
+  });
+
   job.status = 'awaiting_arbitration';
-  console.log(`Job ${jobId} disputed — frozen in escrow, awaiting human arbitration.`);
+  console.log(`Job ${jobId} disputed on-chain: ${disputeRes.data.id}`);
   return { ok: true, status: 'awaiting_arbitration' };
 }
 
-// Returns every job currently frozen and waiting for an admin decision.
 function listPendingArbitration() {
   const list = [];
   for (const [jobId, job] of pendingJobs.entries()) {
     if (job.status === 'awaiting_arbitration') {
-      list.push({
-        jobId,
-        amount: job.amount,
-        taskType: job.taskResult && job.taskResult.taskType,
-        result: job.taskResult && job.taskResult.result,
-      });
+      list.push({ jobId, amount: job.amount, taskType: job.taskResult && job.taskResult.taskType, result: job.taskResult && job.taskResult.result });
     }
   }
   return list;
 }
 
-// Human arbitrator's decision: either release to the worker, or refund the client.
+// Human arbitrator resolves a disputed job on-chain via the escrow wallet.
 async function resolveArbitration(jobId, decision) {
   const job = pendingJobs.get(jobId);
   if (!job) return { ok: false, error: 'Job not found or already resolved' };
   if (job.status !== 'awaiting_arbitration') return { ok: false, error: `Job is not awaiting arbitration (status: ${job.status})` };
 
-  if (decision === 'release') {
-    const finalTx = await transferUSDC(
-      process.env.ESCROW_WALLET_ID,
-      process.env.WORKER_WALLET_ADDRESS,
-      job.amount
-    );
-    job.status = 'released';
-    job.finalTx = finalTx;
-    await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
-    await logArbitrationDecision(jobId, 'release', job.amount, job.taskResult && job.taskResult.taskType);
-    console.log(`Arbitration on job ${jobId}: RELEASED to worker (via Latch): ${finalTx.id}`);
-    return { ok: true, status: 'released', finalTx };
-  } else if (decision === 'refund') {
-    const finalTx = await transferUSDC(
-      process.env.ESCROW_WALLET_ID,
-      process.env.WALLET_ADDRESS,
-      job.amount
-    );
-    job.status = 'refunded';
-    job.finalTx = finalTx;
-    await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
-    await logArbitrationDecision(jobId, 'refund', job.amount, job.taskResult && job.taskResult.taskType);
-    console.log(`Arbitration on job ${jobId}: REFUNDED to client (via Latch): ${finalTx.id}`);
-    return { ok: true, status: 'refunded', finalTx };
-  } else {
-    return { ok: false, error: 'decision must be "release" or "refund"' };
-  }
+  const releaseToWorker = decision === 'release';
+  if (decision !== 'release' && decision !== 'refund') return { ok: false, error: 'decision must be "release" or "refund"' };
+
+  const resolveRes = await callContract({
+    walletId: process.env.ESCROW_WALLET_ID,
+    abiFunctionSignature: 'resolve(bytes32,bool)',
+    abiParameters: [jobId, releaseToWorker],
+  });
+
+  job.status = releaseToWorker ? 'released' : 'refunded';
+  job.finalTx = resolveRes.data;
+  await recordJob(releaseToWorker, process.env.WORKER_WALLET_ADDRESS);
+
+  console.log(`On-chain arbitration on job ${jobId}: ${job.status} (${resolveRes.data.id})`);
+  return { ok: true, status: job.status, finalTx: resolveRes.data };
 }
 
 function getJobStatus(jobId) {
@@ -243,8 +212,3 @@ function getJobStatus(jobId) {
 }
 
 module.exports = { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration, calculatePrice };
-
-if (require.main === module) {
-  const sampleText = "Arc is a Layer-1 blockchain built by Circle specifically for stablecoin finance.";
-  runEscrowJob(sampleText).then(r => console.log('\nFinal result:', r));
-}
