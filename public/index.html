@@ -214,12 +214,12 @@
       <label class="panel-label" for="taskInput">Task — the agent classifies this automatically</label>
       <span class="counter" id="wordCount">0 words</span>
     </div>
-    <textarea id="taskInput" oninput="updateCounter()" placeholder="Type anything: a passage to summarize, a review to analyze, or a question to answer. The agent figures out which.">Arc is a Layer-1 blockchain built by Circle specifically for stablecoin finance. It uses USDC as the native gas token, offers sub-second transaction finality, and provides a full developer platform for building payment applications, DeFi products, and autonomous AI agents that can transact value in real time without human intervention.</textarea>
+    <textarea id="taskInput" oninput="updateCounter()" placeholder="Type anything: a passage to summarize, a review to analyze, or a question to answer. The agent figures out which.">Rialo is a developer-first Layer-1 blockchain built by Subzero Labs, designed to be the best blockchain for the agent economy. It features native webcalls that let on-chain programs communicate directly with AI agents, native timers for automatic deadline enforcement, and fast finality, enabling autonomous agents to transact and coordinate without human intervention.</textarea>
 
     <div class="row-config">
       <span class="price-tag" id="pricePreview">Estimated fee: 1 USDC</span>
       <div class="presets">
-        <button class="preset-btn" onclick="loadPreset('arc')">Arc description</button>
+        <button class="preset-btn" onclick="loadPreset('arc')">Rialo description</button>
         <button class="preset-btn" onclick="loadPreset('review')">Product review</button>
         <button class="preset-btn" onclick="loadPreset('question')">Direct question</button>
       </div>
@@ -276,7 +276,7 @@ function updateCounter(){
 updateCounter();
 
 const presets = {
-  arc: "Arc is a Layer-1 blockchain built by Circle specifically for stablecoin finance. It uses USDC as the native gas token, offers sub-second transaction finality, and provides a full developer platform for building payment applications, DeFi products, and autonomous AI agents that can transact value in real time without human intervention.",
+  arc: "Rialo is a developer-first Layer-1 blockchain built by Subzero Labs, designed to be the best blockchain for the agent economy. It features native webcalls that let on-chain programs communicate directly with AI agents, native timers for automatic deadline enforcement, and fast finality, enabling autonomous agents to transact and coordinate without human intervention.",
   review: "This product completely exceeded my expectations, the build quality is fantastic and the battery life is much better than advertised. Highly recommend it to anyone on the fence.",
   question: "What is the capital of Japan?"
 };
