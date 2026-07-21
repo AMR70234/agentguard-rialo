@@ -179,22 +179,31 @@ async function getSingleVerdict(taskInput, result, taskType) {
 
 // Runs the arbitrator 3 times independently and takes the majority verdict,
 // since a single LLM call can occasionally flip its decision on the same input.
+// If tied, casts up to 2 tie-breaker votes before falling back to manual review,
+// so a job doesn't sit stuck in the admin queue for an avoidable coin-flip tie.
 async function aiArbitrate(taskInput, result, taskType) {
   try {
-    const votes = await Promise.all([
+    let votes = await Promise.all([
       getSingleVerdict(taskInput, result, taskType),
       getSingleVerdict(taskInput, result, taskType),
       getSingleVerdict(taskInput, result, taskType),
     ]);
 
-    console.log(`Arbitration votes: [${votes.join(', ')}]`);
+    for (let round = 0; round < 2; round++) {
+      console.log(`Arbitration votes (round ${round + 1}): [${votes.join(', ')}]`);
+      const releaseCount = votes.filter(v => v === 'release').length;
+      const refundCount = votes.filter(v => v === 'refund').length;
 
-    const releaseCount = votes.filter(v => v === 'release').length;
-    const refundCount = votes.filter(v => v === 'refund').length;
+      if (releaseCount > refundCount) return 'release';
+      if (refundCount > releaseCount) return 'refund';
 
-    if (releaseCount > refundCount) return 'release';
-    if (refundCount > releaseCount) return 'refund';
-    return null; // tie or all inconclusive — falls back to manual review
+      // Tied — cast one more tie-breaker vote and re-check
+      const tieBreaker = await getSingleVerdict(taskInput, result, taskType);
+      votes.push(tieBreaker);
+    }
+
+    console.log(`Arbitration still inconclusive after tie-breakers: [${votes.join(', ')}] — routing to manual review.`);
+    return null; // still tied after tie-breakers — falls back to manual review
   } catch (err) {
     console.error('AI arbitration failed:', err.message);
     return null;
