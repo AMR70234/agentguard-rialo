@@ -263,7 +263,7 @@
     </div>
     <div class="log" id="log"><div class="empty">No job run yet. Press "Run agent job" to start.</div></div>
     <div class="dispute-bar" id="disputeBar">
-      <span class="dispute-timer" id="disputeTimer">You have 8s to dispute this result</span>
+      <span class="dispute-timer" id="disputeTimer">You have 30s to dispute this result</span>
       <button class="dispute-btn" onclick="disputeCurrentJob()">Dispute this result</button>
     </div>
   </div>
@@ -501,7 +501,7 @@ async function runJob(){
     entry.type = data.taskType;
     entry.amount = data.amount;
     if (data.disputable && data.jobId) {
-      startDisputeCountdown(data.jobId, data.disputeWindowMs || 8000);
+      startDisputeCountdown(data.jobId, data.disputeWindowMs || 60000);
     }
     addLine('✓', `Result: <b>"${data.summary}"</b>`);
     addLine('$', `Escrowed fee: <b>${data.amount} USDC</b> (auto-priced by task length)`, true);

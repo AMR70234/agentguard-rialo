@@ -34,16 +34,17 @@ app.post('/run-job', async (req, res) => {
     const result = await runEscrowJob(taskInput, amount);
 
     return res.json({
-      accepted: result.accepted,
-      disputable: result.disputable || false,
-      jobId: result.jobId || null,
-      disputeWindowMs: result.disputeWindowMs || 0,
-      summary: result.summary,
-      taskType: result.taskType,
-      amount: result.amount,
-      transaction: result.finalTx || result.escrowTx,
-      stats: result.stats,
-    });
+  accepted: result.accepted,
+  disputable: result.disputable || false,
+  jobId: result.jobId || null,
+  disputeWindowMs: result.disputeWindowMs || 0,
+  disputeWindowMsDebug: 60000, // ← أضف هذا السطر للاختبار
+  summary: result.summary,
+  taskType: result.taskType,
+  amount: result.amount,
+  transaction: result.finalTx || result.escrowTx,
+  stats: result.stats,
+});
   } catch (error) {
     console.error('❌ Error in /run-job:', error.message);
     return res.status(500).json({ error: error.message });
@@ -91,14 +92,16 @@ app.post('/admin/resolve', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /admin/audit-log — view every past arbitration decision (who decided what, and when)
+// GET /admin/audit-log — view every past arbitration decision
 app.get('/admin/audit-log', requireAdmin, async (req, res) => {
   try {
-    const readRes = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_AUDIT_BIN_ID}/latest`, {
-      headers: { 'X-Master-Key': process.env.JSONBIN_API_KEY },
+    const db = require('./db');
+    db.all('SELECT * FROM audit_log ORDER BY timestamp DESC', (err, rows) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json(rows);
     });
-    const readData = await readRes.json();
-    res.json(readData.record && readData.record.decisions ? readData.record.decisions : []);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -160,3 +163,12 @@ const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
+// Keep-Alive: منع السيرفر من النوم على Render
+setInterval(async () => {
+  try {
+    await fetch(`http://localhost:${PORT}/reputation`);
+    console.log('🔄 Keep-alive ping sent');
+  } catch (e) {
+    // السيرفر شغال، مش مشكلة
+  }
+}, 5 * 60 * 1000); // كل 5 دقائق

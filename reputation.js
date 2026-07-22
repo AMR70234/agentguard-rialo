@@ -1,73 +1,52 @@
 require('dotenv').config();
+const db = require('./db');
 
-const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
-const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID;
-const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
-
-// Local in-memory cache, refreshed from JSONBin on read/write
-let cache = { workers: {} };
-let cacheLoaded = false;
-
-async function loadFromRemote() {
-  try {
-    const res = await fetch(`${JSONBIN_URL}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_API_KEY },
-    });
-    if (!res.ok) throw new Error(`JSONBin read failed: ${res.status}`);
-    const data = await res.json();
-    cache = data.record && data.record.workers ? data.record : { workers: {} };
-    cacheLoaded = true;
-  } catch (err) {
-    console.error('⚠️ Could not load reputation from JSONBin, using local cache:', err.message);
-  }
-}
-
-async function saveToRemote() {
-  try {
-    const res = await fetch(JSONBIN_URL, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY,
-      },
-      body: JSON.stringify(cache),
-    });
-    if (!res.ok) throw new Error(`JSONBin write failed: ${res.status}`);
-  } catch (err) {
-    console.error('⚠️ Could not save reputation to JSONBin:', err.message);
-  }
-}
-
-function getWorkerStats(walletAddress) {
-  const w = cache.workers[walletAddress];
-  if (!w) return { totalJobs: 0, accepted: 0, rejected: 0, acceptanceRate: 100 };
-  const acceptanceRate = w.totalJobs > 0 ? Math.round((w.accepted / w.totalJobs) * 100) : 100;
-  return { ...w, acceptanceRate };
-}
-
-// Records a job outcome against a specific worker wallet address (persistent identity),
-// instead of a single global counter.
+// Records a job outcome against a specific worker wallet address
 async function recordJob(accepted, walletAddress) {
-  if (!cacheLoaded) await loadFromRemote();
-
   const address = walletAddress || process.env.WORKER_WALLET_ADDRESS;
-  if (!cache.workers[address]) {
-    cache.workers[address] = { totalJobs: 0, accepted: 0, rejected: 0 };
-  }
-
-  cache.workers[address].totalJobs += 1;
-  if (accepted) cache.workers[address].accepted += 1;
-  else cache.workers[address].rejected += 1;
-
-  await saveToRemote();
-  return getWorkerStats(address);
+  
+  return new Promise((resolve, reject) => {
+    // جلب البيانات الحالية
+    db.get('SELECT * FROM reputation WHERE wallet = ?', [address], (err, row) => {
+      if (err) return reject(err);
+      
+      const totalJobs = (row?.jobs_completed || 0) + 1;
+      const acceptedCount = (row?.accepted || 0) + (accepted ? 1 : 0);
+      const rejectedCount = (row?.rejected || 0) + (accepted ? 0 : 1);
+      const acceptanceRate = totalJobs > 0 ? Math.round((acceptedCount / totalJobs) * 100) : 100;
+      
+      // تحديث البيانات
+      db.run(
+        `INSERT OR REPLACE INTO reputation (wallet, jobs_completed, accepted, rejected, acceptance_rate)
+         VALUES (?, ?, ?, ?, ?)`,
+        [address, totalJobs, acceptedCount, rejectedCount, acceptanceRate],
+        (err) => {
+          if (err) return reject(err);
+          resolve({ totalJobs, accepted: acceptedCount, rejected: rejectedCount, acceptanceRate });
+        }
+      );
+    });
+  });
 }
 
-// Returns stats for the default worker wallet (used by the frontend /reputation endpoint)
+// Returns stats for a worker wallet
 async function getStats(walletAddress) {
-  if (!cacheLoaded) await loadFromRemote();
   const address = walletAddress || process.env.WORKER_WALLET_ADDRESS;
-  return getWorkerStats(address);
+  
+  return new Promise((resolve, reject) => {
+    db.get('SELECT * FROM reputation WHERE wallet = ?', [address], (err, row) => {
+      if (err) return reject(err);
+      if (!row) {
+        return resolve({ totalJobs: 0, accepted: 0, rejected: 0, acceptanceRate: 100 });
+      }
+      resolve({
+        totalJobs: row.jobs_completed,
+        accepted: row.accepted,
+        rejected: row.rejected,
+        acceptanceRate: row.acceptance_rate
+      });
+    });
+  });
 }
 
 module.exports = { recordJob, getStats };

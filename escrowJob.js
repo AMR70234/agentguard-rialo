@@ -4,7 +4,7 @@ const { callContract } = require('./contractClient');
 const { executeTask } = require('./task');
 const { recordJob } = require('./reputation');
 
-const DISPUTE_WINDOW_MS = 8000;
+const DISPUTE_WINDOW_MS = 30000;
 const pendingJobs = new Map(); // jobId -> { taskResult, amount, timer, status }
 
 const DAILY_USDC_LIMIT = 20;
@@ -73,6 +73,12 @@ async function runEscrowJob(taskInput, amount) {
 
   const jobId = '0x' + crypto.createHash('sha256').update(crypto.randomUUID()).digest('hex');
 
+  // 🔥 Auto-approve USDC first
+  const approved = await approveUSDC(amount);
+  if (!approved) {
+    return { accepted: false, disputable: false, summary: "USDC approval failed - please check wallet balance", taskType: "error", amount, finalTx: null, stats: null };
+  }
+
   console.log(`On-chain: creating job ${jobId}, escrowing ${amount} USDC...`);
   const createRes = await callContract({
     walletId: process.env.WALLET_ID,
@@ -80,6 +86,7 @@ async function runEscrowJob(taskInput, amount) {
     abiParameters: [jobId, process.env.WORKER_WALLET_ADDRESS, toUnits(amount)],
   });
   const createTx = await pollTransaction(createRes.data.id);
+  console.log("🔥 createTx:", JSON.stringify(createTx, null, 2));
   if (createTx.state !== 'COMPLETE') {
     return { accepted: false, disputable: false, summary: 'On-chain escrow failed.', taskType: 'error', amount, finalTx: null, stats: null };
   }
@@ -279,3 +286,35 @@ function getJobStatus(jobId) {
 }
 
 module.exports = { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration, calculatePrice };
+
+// 🔥 NEW: Function to approve USDC for the escrow contract
+async function approveUSDC(amount) {
+  const { callContract } = require('./contractClient');
+  const USDC_ADDRESS = process.env.USDC_TOKEN_ADDRESS || '0x3600000000000000000000000000000000000000';
+  const CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS;
+  const amountUnits = toUnits(amount);
+  
+  console.log(`📤 Approving ${amount} USDC for contract: ${CONTRACT_ADDRESS}...`);
+  
+  try {
+    const approveRes = await callContract({
+      walletId: process.env.WALLET_ID,
+      contractAddress: USDC_ADDRESS,
+      abiFunctionSignature: 'approve(address,uint256)',
+      abiParameters: [CONTRACT_ADDRESS, amountUnits],
+    });
+    
+    console.log(`✅ Approve submitted: ${approveRes.data.id}`);
+    
+    // Poll for completion
+    const approveTx = await pollTransaction(approveRes.data.id);
+    if (approveTx.state !== 'COMPLETE') {
+      throw new Error(`Approve failed: ${approveTx.state}`);
+    }
+    console.log('✅ Approve confirmed on-chain!');
+    return true;
+  } catch (error) {
+    console.error('❌ Approve failed:', error.message);
+    return false;
+  }
+}
