@@ -8,7 +8,7 @@ AgentGuard demonstrates how a client agent and a worker agent can transact USDC 
 
 1. **Independent verification** — The worker executes tasks with one model and a *separate* model independently judges whether the output is genuine, rather than letting a single model grade its own work.
 2. **Stale-fact rejection** — Answers about time-sensitive facts (current officeholders, prices, recent events) are rejected unless they include an explicit caveat that the information may be outdated.
-3. **Dispute window** — Accepted jobs aren't released instantly. Funds sit in escrow for a short window during which the client can dispute the result and get refunded before the automatic release fires.
+3. **Dispute window** — Accepted jobs aren't released instantly. Funds sit in escrow for a 30-second window during which the client can dispute the result before the automatic release fires.
 4. **Explorer links** — Every settled transaction surfaces a direct link to view it on the Arc block explorer.
 5. **Latch-secured access to both OpenAI and Circle** — The agent never holds raw OpenAI or Circle credentials directly in its request path. Instead, both AI calls and USDC transfers go through separate, independently-scoped Latch tokens that enforce policy at the network edge, before the request ever reaches OpenAI or Circle. See "Latch integration status" below for the full breakdown of both policies.
 
@@ -22,7 +22,7 @@ A payment system that lets an agent spend real USDC needs more than "it usually 
 ## Architecture
 Client Agent ──escrow (via Latch-Circle)──▶ Escrow Wallet
                                                     │
-                                          dispute window (8s)
+                                          dispute window (30s)
                                                     │
                         ┌───────────────────────────┴───────────────────────────┐
                         ▼                                                       ▼
@@ -83,7 +83,7 @@ LATCH_ID=
 
 ## Recent additions
 
-**Persistent, wallet-linked reputation.** Worker reputation is no longer a single global counter that resets on every redeploy. It's now keyed by the worker's wallet address and stored externally (via JSONBin), so it survives Render restarts and, if the project ever supports multiple worker agents, each one accumulates its own independent track record instead of sharing one pool.
+**Persistent, wallet-linked reputation.** Worker reputation is no longer a single global counter that resets on every redeploy. It's now keyed by the worker's wallet address and stored in a local SQLite database (`agentguard.db`, via `db.js`), so it survives Render restarts and, if the project ever supports multiple worker agents, each one accumulates its own independent track record instead of sharing one pool. The arbitration audit log (who decided what, and when) is stored the same way.
 
 **Rialo/SCALE domain knowledge.** The QA task handler now has accurate background on Rialo, Subzero Labs, Latch, and SCALE (Simple Contracts for Agent Labor Execution) — Rialo's own on-chain framework for paying AI agents, which uses escrow, a judge agent, and automatic refunds on missed deadlines. Notably, AgentGuard's escrow → verify → release/refund flow independently converges on a similar pattern to SCALE, built off-chain on Arc/Circle instead.
 
@@ -112,17 +112,35 @@ Escrow logic now runs on an actual smart contract deployed on Arc Testnet, inste
 - `release(jobId)` — anyone can trigger release once the window has passed with no dispute
 - `resolve(jobId, releaseToWorker)` — only the designated arbitrator wallet can resolve a disputed job
 
-**Deployed address:** `0x2460d5713367a3a5befca87363b221d47045d580` (Arc Testnet)
+**Deployed address:** `0xef106e1ecbb38648f52bd284e2c2b1b0a6b5a4b3` (Arc Testnet)
 
 **Why this matters:** previously, if the server hosting this app went down or was compromised, funds sitting in an intermediate escrow wallet had no guaranteed resolution path — everything depended on this server's own logic staying correct and available. Now, the escrow, dispute window, and arbitration rules are enforced by the contract itself, independent of server uptime. The arbitrator is a separate wallet (the escrow wallet) from the client, so a client can't dispute and then "arbitrate" their own claim.
 
 **What's still true:** this is an experimental, unaudited contract built as a learning exercise — not reviewed by a professional smart contract auditor, and not intended for production use with real funds. Circle's Developer-Controlled Wallets still sign every on-chain call; deploying via Circle's Smart Contract Platform meant no separate private key was needed.
 
+## Contract hardening: OpenZeppelin, ReentrancyGuard, and a real safety valve
+
+The smart contract was rewritten on top of OpenZeppelin's audited primitives, closing several gaps the first version had:
+
+- **`ReentrancyGuard` on every fund-moving function** (`createJob`, `release`, `resolve`, `forceRefund`) — protects against reentrancy attacks, one of the most common real-world smart contract exploits.
+- **`Ownable` access control**, separate from the arbitrator role — the contract owner can rotate the arbitrator (`setArbitrator`) or adjust the dispute window (`setDisputeWindow`, capped at 7 days), without needing the arbitrator's own key.
+- **`forceRefund(jobId)` — a safety valve.** If a job is disputed and the arbitrator doesn't resolve it within 7 days (`ARBITRATION_TIMEOUT`), *anyone* can call this to refund the client. This directly closes the "arbitrator disappears, funds stay stuck forever" failure mode.
+- **Input validation everywhere** — zero-address checks on the USDC token, arbitrator, and worker addresses; a positive-amount check on job creation.
+- **Clearer, prefixed error messages** (`"AgentEscrow: not arbitrator"`) and richer events (amounts included in `JobReleased`/`JobRefunded`) for easier debugging and auditing.
+
+**Currently deployed at:** `0xef106e1ecbb38648f52bd284e2c2b1b0a6b5a4b3` (Arc Testnet) — replacing the earlier, simpler version at `0x2460d571...`.
+
+## Reliability: retries, auto-approval, and uptime
+
+- **Latch calls retry automatically.** `latchClient.js` and `latchCircleClient.js` wrap every request with a 30-second timeout and up to 3 attempts with exponential backoff, instead of failing on the first transient network error.
+- **USDC approval is automatic.** The client wallet's allowance to the escrow contract is checked and topped up (`approveUSDC`) before `createJob` runs, instead of requiring a manual one-time approval step.
+- **The server pings itself every 5 minutes** to reduce Render's free-tier cold-start delay.
+
 ## Human arbitration, made instant and reviewable
 
 Disputing a job used to trigger an automatic refund by default — trusting the client's claim without question. That's been replaced with a real decision process:
 
-- **Dispute button in the UI.** After a job is accepted, the frontend shows an 8-second countdown with a "Dispute this result" button. Clients no longer need to call the API manually.
+- **Dispute button in the UI.** After a job is accepted, the frontend shows a 30-second countdown with a "Dispute this result" button. Clients no longer need to call the API manually.
 - **AI arbitrator resolves most disputes instantly.** An independent model reviews the disputed job the moment it's raised and decides `release` or `refund` — the system doesn't wait on a human for every case.
 - **Majority voting for consistency.** A single LLM call can occasionally flip its verdict on the exact same input — a known property of language models, not a bug. To reduce this, the arbitrator is called independently three times per dispute, and the majority verdict wins. If the vote ties, the job falls back to manual review instead of guessing.
 - **The arbitration prompt was explicitly tuned and tested** against both failure modes: too lenient (approving vague or cut-off answers) and too strict (rejecting short-but-correct ones). Verified with side-by-side test cases for each.
@@ -144,15 +162,16 @@ The homepage shows three banners explaining *what* protects each job, not just t
 
 ## Known limitations
 
-- **Unaudited contract** — `AgentEscrow.sol` has not been professionally reviewed; not intended for real funds yet.
-- **Fixed arbitrator** — the arbitrator wallet is set at deploy time and cannot be changed without redeploying the contract.
+- **Unaudited contract** — `AgentEscrow.sol` has not been professionally reviewed by a smart contract security firm; not intended for real funds yet, despite the added OpenZeppelin hardening.
 - **Shared daily limit** — the spend cap is global across all visitors, not per-user or per-session.
 - **Single worker agent** — wallet-linked reputation is ready, but there is only one worker to track today.
+- **`forceRefund` favors the client by design** — if arbitration times out after 7 days, funds return to the client rather than the worker, on the assumption that an unresolved dispute should not leave a worker paid without review.
 
 ## What's next
 
 - Add per-user or per-session daily spend tracking, so a shared demo cannot be exhausted by the first few visitors.
 - Get the smart contract professionally audited before it ever touches real funds.
+- Support multiple worker agents competing for jobs, chosen by price and wallet-tracked reputation.
 - Add a safe way to rotate the arbitrator address without a full contract redeploy.
 - Support multiple worker agents competing for jobs, chosen by price and wallet-tracked reputation.
 
