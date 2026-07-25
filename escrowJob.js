@@ -3,8 +3,9 @@ const crypto = require('crypto');
 const { callContract } = require('./contractClient');
 const { executeTask } = require('./task');
 const { recordJob } = require('./reputation');
+const { recordTransaction } = require('./db');
 
-const DISPUTE_WINDOW_MS = 30000;
+const DISPUTE_WINDOW_MS = 33000; // matches contract's 30s dispute window + 3s buffer
 const pendingJobs = new Map(); // jobId -> { taskResult, amount, timer, status }
 
 const DAILY_USDC_LIMIT = 20;
@@ -108,9 +109,11 @@ async function runEscrowJob(taskInput, amount) {
           abiFunctionSignature: 'release(bytes32)',
           abiParameters: [jobId],
         });
+        const releaseTx = await pollTransaction(releaseRes.data.id);
         job.status = 'released';
         job.finalTx = releaseRes.data;
         await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
+        recordTransaction(jobId, 'released', amount, taskInput, taskResult, releaseTx.txHash);
         console.log(`On-chain auto-release for job ${jobId}: ${releaseRes.data.id}`);
       } catch (err) {
         console.error(`Auto-release failed for job ${jobId}:`, err.message);
@@ -147,6 +150,8 @@ async function runEscrowJob(taskInput, amount) {
     });
 
     const stats = await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
+    const refundTx = await pollTransaction(resolveRes.data.id);
+    recordTransaction(jobId, 'refunded', amount, taskInput, taskResult, refundTx.txHash);
 
     return {
       accepted: false,
@@ -274,6 +279,8 @@ async function resolveArbitration(jobId, decision) {
   job.status = releaseToWorker ? 'released' : 'refunded';
   job.finalTx = resolveRes.data;
   await recordJob(releaseToWorker, process.env.WORKER_WALLET_ADDRESS);
+  const resolveTx = await pollTransaction(resolveRes.data.id);
+  recordTransaction(jobId, job.status, job.amount, job.taskInput, job.taskResult, resolveTx.txHash);
 
   console.log(`On-chain arbitration on job ${jobId}: ${job.status} (${resolveRes.data.id})`);
   return { ok: true, status: job.status, finalTx: resolveRes.data };

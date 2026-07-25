@@ -25,6 +25,7 @@ db.serialize(() => {
   )`);
 
   // جدول الوظائف المعلقة (Pending Jobs)
+  db.run(`ALTER TABLE jobs ADD COLUMN txHash TEXT`, () => {}); // ignore error if column exists
   db.run(`CREATE TABLE IF NOT EXISTS jobs (
     jobId TEXT PRIMARY KEY,
     status TEXT NOT NULL,
@@ -35,4 +36,23 @@ db.serialize(() => {
   )`);
 });
 
+function recordTransaction(jobId, status, amount, taskInput, taskResult, txHash) {
+  db.run(
+    `INSERT OR REPLACE INTO jobs (jobId, status, amount, taskResult, taskInput, txHash)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [jobId, status, amount, JSON.stringify(taskResult || null), taskInput || null, txHash || null],
+    (err) => { if (err) console.error('Failed to record transaction:', err.message); }
+  );
+}
+
+function getRecentTransactions(limit, callback) {
+  db.all(
+    'SELECT * FROM jobs ORDER BY createdAt DESC LIMIT ?',
+    [limit || 50],
+    callback
+  );
+}
+
 module.exports = db;
+module.exports.recordTransaction = recordTransaction;
+module.exports.getRecentTransactions = getRecentTransactions;

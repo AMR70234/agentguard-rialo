@@ -25,7 +25,8 @@ async function deployContract() {
     bytecode: bytecode,
     constructorParameters: [
       process.env.USDC_TOKEN_ADDRESS || '0x3600000000000000000000000000000000000000',
-      process.env.ESCROW_WALLET_ADDRESS
+      process.env.ESCROW_WALLET_ADDRESS,
+      process.env.WALLET_ADDRESS
     ],
     feeLevel: 'MEDIUM',
   };

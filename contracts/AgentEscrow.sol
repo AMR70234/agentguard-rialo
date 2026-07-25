@@ -55,7 +55,7 @@ contract AgentEscrow is ReentrancyGuard, Ownable {
         _;
     }
 
-    constructor(address usdcToken, address arbitratorAddress) Ownable(msg.sender) {
+    constructor(address usdcToken, address arbitratorAddress, address ownerAddress) Ownable(ownerAddress) {
         require(usdcToken != address(0), "AgentEscrow: invalid USDC address");
         require(arbitratorAddress != address(0), "AgentEscrow: invalid arbitrator address");
         
