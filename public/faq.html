@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGuard · FAQ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0D10; --panel:#14181D; --border:#232830; --text:#E8EAED;
+    --muted:#8B93A0; --blue:#2775CA;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;margin:0;padding:40px 24px;}
+  .wrap{max-width:820px;margin:0 auto;}
+  nav{display:flex;gap:18px;margin-bottom:28px;font-family:'JetBrains Mono',monospace;font-size:12px;flex-wrap:wrap;}
+  nav a{color:var(--muted);text-decoration:none;}
+  nav a.active{color:var(--text);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:.08em;margin-bottom:10px;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:32px;margin:0 0 12px;}
+  .sub{color:var(--muted);font-size:14.5px;margin-bottom:28px;}
+  .section-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:28px 0 12px;}
+  details{background:var(--panel);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+  summary{padding:14px 16px;cursor:pointer;font-size:14px;font-weight:500;list-style:none;display:flex;justify-content:space-between;align-items:center;}
+  summary::-webkit-details-marker{display:none;}
+  summary::after{content:'+';color:var(--muted);font-size:16px;}
+  details[open] summary::after{content:'\2212';}
+  .answer{padding:0 16px 16px;font-size:13px;color:var(--muted);line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a href="/">Home</a>
+    <a href="/how-it-works.html">How it works</a>
+    <a href="/security.html">Security</a>
+    <a href="/transactions.html">Transactions</a>
+    <a href="/reputation.html">Reputation</a>
+    <a href="/faq.html" class="active">FAQ</a>
+  </nav>
+
+  <div class="eyebrow">QUESTIONS AND ANSWERS</div>
+  <h1>Frequently asked questions</h1>
+  <p class="sub">Honest answers about how AgentGuard works, what protects it, and where it still falls short.</p>
+
+  <div class="section-title">The basics</div>
+
+  <details>
+    <summary>What is AgentGuard in one sentence?</summary>
+    <div class="answer">A payment system where a client agent and a worker agent transact USDC on Arc autonomously — no human approving each individual transaction.</div>
+  </details>
+
+  <details>
+    <summary>Is this real money?</summary>
+    <div class="answer">No — this runs on Arc Testnet with test USDC. The goal is proving the pattern works before any real deployment.</div>
+  </details>
+
+  <details>
+    <summary>Why hold funds in escrow instead of paying directly?</summary>
+    <div class="answer">So the client has a real window to review the work before funds settle permanently with the worker — funds sit in a smart contract, not with either party.</div>
+  </details>
+
+  <details>
+    <summary>Who decides if there's a disagreement?</summary>
+    <div class="answer">An independent AI model reviews the dispute immediately, voted on three separate times with majority ruling. A rare tie routes to a password-protected admin dashboard for a human decision.</div>
+  </details>
+
+  <div class="section-title">Latch — access control</div>
+
+  <details>
+    <summary>What is Latch, and why does AgentGuard use it?</summary>
+    <div class="answer">Latch is a policy-enforcement proxy from Subzero Labs (the team behind Rialo). Instead of the agent holding raw OpenAI or Circle API keys, every call passes through a Latch-scoped token that checks it against allowed limits first — endpoint allowlists, rate limits, spend caps — before the request ever reaches OpenAI or Circle.</div>
+  </details>
+
+  <details>
+    <summary>What does Latch actually protect here?</summary>
+    <div class="answer">Two separate policies: one for every OpenAI call in task.js (capped at 60 req/min, $5/day, specific models only), and one for Circle USDC transfers (capped at 10 USDC per transfer, 20 USDC/day). Each is independently scoped — a leak in one doesn't expose the other.</div>
+  </details>
+
+  <details>
+    <summary>What's the actual benefit of Latch, if the system already works without it?</summary>
+    <div class="answer">Blast-radius reduction. If a credential ever leaked, an unscoped key has no limit on the damage. A Latch-scoped token caps that damage to specific endpoints, small amounts, and rate limits. It's a defense-in-depth layer, not a functional requirement — the app would still run without it, just with a much larger risk if something went wrong.</div>
+  </details>
+
+  <details>
+    <summary>Did building this surface anything useful about Latch itself?</summary>
+    <div class="answer">Yes — two concrete technical notes found during integration: the correct live proxy URL format wasn't obvious from early examples, and Latch's numeric comparison filters don't coerce a numeric string into a number, which caused a working policy to always reject valid Circle transfer amounts until a regex-based filter was used instead.</div>
+  </details>
+
+  <div class="section-title">Security and the smart contract</div>
+
+  <details>
+    <summary>Is the smart contract audited?</summary>
+    <div class="answer">No — it's built on OpenZeppelin's audited primitives (ReentrancyGuard, Ownable, Pausable), but the contract as a whole hasn't been reviewed by a professional security firm. Not intended for real funds yet.</div>
+  </details>
+
+  <details>
+    <summary>What happens if the arbitrator or owner disappears?</summary>
+    <div class="answer">forceRefund() is a safety valve: if a dispute sits unresolved for 7 days, anyone can call it to refund the client. Separately, the contract has an emergency pause the owner can trigger to block new jobs and releases immediately if a critical bug is ever found — without redeploying.</div>
+  </details>
+
+  <details>
+    <summary>Can the AI arbitrator be manipulated or give inconsistent decisions?</summary>
+    <div class="answer">A single AI call can occasionally flip its verdict on identical input — a known property of language models. To reduce this, the arbitrator is called three times independently per dispute, with tie-breaker rounds before falling back to manual review.</div>
+  </details>
+
+  <div class="section-title">Relation to Rialo</div>
+
+  <details>
+    <summary>Does AgentGuard resemble something Rialo already has?</summary>
+    <div class="answer">Yes, notably. Rialo has its own framework called SCALE (Simple Contracts for Agent Labor Execution) that does essentially the same thing: escrow funds for a task, have an independent judge review the work, and auto-refund on missed deadlines. AgentGuard arrived at the same pattern independently, built on Arc/Circle instead of Rialo's own chain.</div>
+  </details>
+
+  <details>
+    <summary>What's the practical value for Rialo's team?</summary>
+    <div class="answer">A real, working test case for Latch in an "agent pays agent" scenario, independent validation that the SCALE-like pattern is workable outside Rialo's own chain, and concrete technical feedback on Latch's proxy format and payload filter behavior.</div>
+  </details>
+
+  <div class="section-title">Honest limitations</div>
+
+  <details>
+    <summary>What's not finished yet?</summary>
+    <div class="answer">The daily spend cap is shared across all visitors, not per-user. Only one worker agent exists today, though wallet-linked reputation is ready for more. The contract still needs a professional audit before handling real funds.</div>
+  </details>
+
+  <details>
+    <summary>If it's not production-ready, what's the point?</summary>
+    <div class="answer">To demonstrate a working, tested proof of concept — real transactions on Arc Testnet, verified end-to-end, with every design decision documented honestly. It shows the pattern works, not that it's finished.</div>
+  </details>
+
+</div>
+</body>
+</html>
