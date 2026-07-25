@@ -76,7 +76,7 @@
 
   <details>
     <summary>What does Latch actually protect here?</summary>
-    <div class="answer">Two separate policies: one for every OpenAI call in task.js (capped at 60 req/min, $5/day, specific models only), and one for Circle USDC transfers (capped at 10 USDC per transfer, 20 USDC/day). Each is independently scoped — a leak in one doesn't expose the other.</div>
+    <div class="answer">Three separate policies: one for every OpenAI call in task.js (capped at 60 req/min, $5/day, specific models only), one for Circle USDC transfers (capped at 10 USDC per transfer, 20 USDC/day), and one for smart contract execution itself — createJob, dispute, release, resolve, pause — restricted to POST requests where the contractAddress exactly matches the deployed AgentEscrow contract. Each is independently scoped — a leak in one doesn't expose the others.</div>
   </details>
 
   <details>
