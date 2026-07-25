@@ -42,6 +42,14 @@
   </div>
 
   <div id="dashboard">
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Emergency controls</div>
+      <div style="display:flex;gap:10px;">
+        <button class="action-btn refund-btn" onclick="pauseContract()">Pause contract</button>
+        <button class="action-btn release-btn" onclick="unpauseContract()">Unpause contract</button>
+      </div>
+      <div id="pauseStatus" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
+    </div>
     <div id="jobList"></div>
   </div>
 </div>
@@ -56,6 +64,36 @@ function login(){
   document.getElementById('loginBox').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   loadDisputes();
+}
+
+async function pauseContract(){
+  const statusEl = document.getElementById('pauseStatus');
+  statusEl.textContent = 'Pausing...';
+  try{
+    const res = await fetch(`${API_BASE}/admin/pause`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_SECRET}` },
+    });
+    const data = await res.json();
+    statusEl.textContent = data.ok ? 'Contract paused. New jobs and releases are blocked.' : (data.error || 'Failed to pause.');
+  }catch(e){
+    statusEl.textContent = 'Could not reach the backend.';
+  }
+}
+
+async function unpauseContract(){
+  const statusEl = document.getElementById('pauseStatus');
+  statusEl.textContent = 'Unpausing...';
+  try{
+    const res = await fetch(`${API_BASE}/admin/unpause`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ADMIN_SECRET}` },
+    });
+    const data = await res.json();
+    statusEl.textContent = data.ok ? 'Contract unpaused. Normal operation resumed.' : (data.error || 'Failed to unpause.');
+  }catch(e){
+    statusEl.textContent = 'Could not reach the backend.';
+  }
 }
 
 async function loadDisputes(){

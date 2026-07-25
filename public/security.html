@@ -80,7 +80,7 @@
       <div>
         <h3>On-chain escrow</h3>
         <p>Funds are held by a smart contract deployed on Arc Testnet, not by this application server. Built on OpenZeppelin's audited primitives with reentrancy protection, and a safety valve: if a dispute sits unresolved for 7 days, anyone can trigger a refund to the client.</p>
-        <a class="contract-link" href="https://testnet.arcscan.app/address/0xef106e1ecbb38648f52bd284e2c2b1b0a6b5a4b3" target="_blank" rel="noopener">View contract on Arc Explorer ↗</a>
+        <a class="contract-link" href="https://testnet.arcscan.app/address/0x1783f4794fdb6cdaa93c98c117063833238494e4" target="_blank" rel="noopener">View contract on Arc Explorer ↗</a>
       </div>
     </div>
 
@@ -89,6 +89,14 @@
       <div>
         <h3>AI arbitration with majority voting</h3>
         <p>A disputed job is reviewed by an independent model, called three separate times. The majority verdict decides release or refund — reducing the chance a single inconsistent call settles the outcome. A rare tie routes to a password-protected admin dashboard for manual review.</p>
+      </div>
+    </div>
+
+    <div class="layer-card">
+      <i class="ti ti-player-pause"></i>
+      <div>
+        <h3>Emergency pause</h3>
+        <p>The contract inherits OpenZeppelin's Pausable. If a critical bug were ever found, the contract owner can immediately block new jobs and releases without redeploying — existing disputes can still be arbitrated or force-refunded even while paused, so escrowed funds are never permanently frozen.</p>
       </div>
     </div>
   </div>
@@ -107,6 +115,10 @@
       <div class="limitation-item">
         <i class="ti ti-alert-triangle"></i>
         <p><b>Single worker agent.</b> Wallet-linked reputation is ready, but there's only one worker to track today.</p>
+      </div>
+      <div class="limitation-item">
+        <i class="ti ti-alert-triangle"></i>
+        <p><b>Force-refund favors the client.</b> If a dispute times out after 7 days, funds return to the client by design, not the worker.
       </div>
     </div>
   </div>

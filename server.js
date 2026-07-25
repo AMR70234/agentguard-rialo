@@ -131,6 +131,34 @@ app.get('/tx/:id', async (req, res) => {
 });
 
 // GET /balances
+app.post('/admin/pause', requireAdmin, async (req, res) => {
+  try {
+    const { callContract } = require('./contractClient');
+    const result = await callContract({
+      walletId: process.env.WALLET_ID,
+      abiFunctionSignature: 'pause()',
+      abiParameters: [],
+    });
+    res.json({ ok: true, tx: result.data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/admin/unpause', requireAdmin, async (req, res) => {
+  try {
+    const { callContract } = require('./contractClient');
+    const result = await callContract({
+      walletId: process.env.WALLET_ID,
+      abiFunctionSignature: 'unpause()',
+      abiParameters: [],
+    });
+    res.json({ ok: true, tx: result.data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/transactions', (req, res) => {
   getRecentTransactions(50, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
