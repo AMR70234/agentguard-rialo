@@ -170,6 +170,17 @@ The contract was redeployed with an explicit `ownerAddress` constructor paramete
 
 The contract now inherits OpenZeppelin's `Pausable`. If a critical bug were ever found, the owner can call `pause()` to immediately block new jobs (`createJob`) and releases (`release`) — without redeploying the contract. Disputed jobs already in progress can still be arbitrated or force-refunded after timeout even while paused, so funds already in escrow are never permanently frozen. Verified end-to-end: paused the contract, confirmed `createJob` reverted, then called `unpause()` and confirmed normal operation resumed.
 
+## Dedicated pages
+
+Beyond the single-page task runner, the site has seven linked pages, all reachable from the nav bar:
+
+- **`/how-it-works.html`** — the full six-step job lifecycle, from task submission to settlement or arbitration.
+- **`/security.html`** — the four (now five, with the emergency pause) protection layers explained individually, including actual Latch policy limits and a link to the deployed contract.
+- **`/transactions.html`** — persistent settlement history pulled from SQLite, with each row linking to the real transaction on Arc Explorer.
+- **`/reputation.html`** — the worker's wallet-linked, persistent track record (total jobs, acceptance rate).
+- **`/faq.html`** — an accordion FAQ covering the basics, Latch's role and actual benefit, contract security, the Rialo/SCALE connection, and honest limitations.
+- **`/compare.html`** — a side-by-side table contrasting a naive "agent pays agent" system against AgentGuard's actual protections.
+
 ## Known limitations
 
 - **Unaudited contract** — `AgentEscrow.sol` has not been professionally reviewed by a smart contract security firm; not intended for real funds yet, despite the added OpenZeppelin hardening.
