@@ -166,6 +166,12 @@ The contract was redeployed with an explicit `ownerAddress` constructor paramete
 
 **Currently deployed at:** `0x1783f4794fdb6cdaa93c98c117063833238494e4` (Arc Testnet), dispute window set to 30 seconds.
 
+## Latch now proxies every action, not just AI and transfers
+
+A third, independently-scoped Latch policy (`AgentGuard-Contract`) now sits in front of every smart contract call — `createJob`, `dispute`, `release`, `resolve`, `pause`, `unpause` — not just OpenAI calls and direct USDC transfers. The policy allows POST requests only to `/v1/w3s/developer/transactions/contractExecution`, and enforces that `contractAddress` in the request body exactly matches the deployed `AgentEscrow` address — so the same credential can't be repurposed to call a different contract.
+
+**Result:** every single action this system takes — AI reasoning, fund transfers, and on-chain contract execution — is policy-checked by Latch before it reaches OpenAI or Circle. No unscoped path into any of the three.
+
 ## Emergency pause
 
 The contract now inherits OpenZeppelin's `Pausable`. If a critical bug were ever found, the owner can call `pause()` to immediately block new jobs (`createJob`) and releases (`release`) — without redeploying the contract. Disputed jobs already in progress can still be arbitrated or force-refunded after timeout even while paused, so funds already in escrow are never permanently frozen. Verified end-to-end: paused the contract, confirmed `createJob` reverted, then called `unpause()` and confirmed normal operation resumed.
