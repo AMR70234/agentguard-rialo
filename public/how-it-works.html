@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGuard · How it works</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0D10; --panel:#14181D; --panel-2:#191E24; --border:#232830; --text:#E8EAED;
+    --muted:#8B93A0; --blue:#2775CA; --green:#22C55E; --red:#EF4444; --amber:#F5A623;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;margin:0;padding:40px 24px;}
+  .wrap{max-width:900px;margin:0 auto;}
+  nav{display:flex;gap:18px;margin-bottom:28px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+  nav a{color:var(--muted);text-decoration:none;}
+  nav a.active{color:var(--text);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:.08em;margin-bottom:10px;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:32px;margin:0 0 12px;}
+  .sub{color:var(--muted);font-size:14.5px;max-width:640px;line-height:1.6;margin-bottom:36px;}
+  .step{display:flex;gap:18px;margin-bottom:0;position:relative;}
+  .step-num{width:36px;height:36px;border-radius:50%;background:var(--panel-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue);flex-shrink:0;}
+  .step-line{width:1px;background:var(--border);flex:1;margin:4px 0;min-height:20px;}
+  .step-content{padding-bottom:28px;flex:1;}
+  .step-content h3{font-size:15px;margin:6px 0 6px;}
+  .step-content p{font-size:13px;color:var(--muted);margin:0;line-height:1.6;}
+  .step-content code{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:2px 6px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text);}
+  .pricing-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;}
+  .pricing-table th{text-align:left;color:var(--muted);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;}
+  .pricing-table td{padding:8px 10px;border-bottom:1px solid var(--border);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a href="/">Home</a>
+    <a href="/how-it-works.html" class="active">How it works</a>
+    <a href="/security.html">Security</a>
+  </nav>
+
+  <div class="eyebrow">FROM TASK TO SETTLEMENT</div>
+  <h1>The full job lifecycle</h1>
+  <p class="sub">Every job goes through the same six steps, autonomously, with no human approving any individual transaction.</p>
+
+  <div class="step">
+    <div>
+      <div class="step-num">1</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step-content">
+      <h3>Client submits a task</h3>
+      <p>Any text — a passage to summarize, a review to analyze, or a question to answer. The client doesn't specify the type; the worker figures it out.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div>
+      <div class="step-num">2</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step-content">
+      <h3>Worker classifies and prices the job</h3>
+      <p>An AI call sorts the task into <code>summarize</code>, <code>sentiment</code>, or <code>qa</code>, then prices it based on length:</p>
+      <table class="pricing-table">
+        <tr><th>Task length</th><th>Fee</th></tr>
+        <tr><td>≤ 20 words</td><td>0.5 USDC</td></tr>
+        <tr><td>21–60 words</td><td>1 USDC</td></tr>
+        <tr><td>60+ words</td><td>2 USDC</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="step">
+    <div>
+      <div class="step-num">3</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step-content">
+      <h3>Funds are escrowed on-chain</h3>
+      <p>The fee moves into the <code>AgentEscrow.sol</code> smart contract on Arc Testnet via Circle's wallet APIs, routed through a Latch policy — not held by this server.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div>
+      <div class="step-num">4</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step-content">
+      <h3>Worker executes, a separate model verifies</h3>
+      <p>One model produces the result. A different, independent model checks it — rejecting non-answers and unqualified time-sensitive claims. No model grades its own work.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div>
+      <div class="step-num">5</div>
+      <div class="step-line"></div>
+    </div>
+    <div class="step-content">
+      <h3>A dispute window opens</h3>
+      <p>Accepted results aren't paid out instantly. The client has 30 seconds to dispute before the automatic release fires.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div>
+      <div class="step-num">6</div>
+    </div>
+    <div class="step-content">
+      <h3>Settlement — or arbitration</h3>
+      <p>No dispute: funds release to the worker automatically. Disputed: an independent AI model votes three times, majority wins, with a human dashboard as fallback for a rare tie. Rejected results refund the client immediately.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
