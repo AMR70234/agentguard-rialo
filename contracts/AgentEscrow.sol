@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title AgentEscrow
@@ -14,7 +15,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * - Use only on testnet with small amounts
  * - Do not use with real funds until professionally audited
  */
-contract AgentEscrow is ReentrancyGuard, Ownable {
+contract AgentEscrow is ReentrancyGuard, Ownable, Pausable {
     enum Status { None, Pending, Released, Disputed, Refunded }
 
     struct Job {
@@ -63,7 +64,7 @@ contract AgentEscrow is ReentrancyGuard, Ownable {
         arbitrator = arbitratorAddress;
     }
 
-    function createJob(bytes32 jobId, address worker, uint256 amount) external nonReentrant {
+    function createJob(bytes32 jobId, address worker, uint256 amount) external nonReentrant whenNotPaused {
         require(jobs[jobId].status == Status.None, "AgentEscrow: job already exists");
         require(worker != address(0), "AgentEscrow: invalid worker address");
         require(amount > 0, "AgentEscrow: amount must be > 0");
@@ -91,7 +92,7 @@ contract AgentEscrow is ReentrancyGuard, Ownable {
         emit JobDisputed(jobId, msg.sender);
     }
 
-    function release(bytes32 jobId) external jobExists(jobId) jobStatus(jobId, Status.Pending) nonReentrant {
+    function release(bytes32 jobId) external jobExists(jobId) jobStatus(jobId, Status.Pending) nonReentrant whenNotPaused {
         Job storage job = jobs[jobId];
         require(block.timestamp > job.disputeDeadline, "AgentEscrow: dispute window still open");
 
@@ -134,6 +135,18 @@ contract AgentEscrow is ReentrancyGuard, Ownable {
         require(newWindow <= 7 days, "AgentEscrow: window too long");
         emit DisputeWindowChanged(disputeWindow, newWindow);
         disputeWindow = newWindow;
+    }
+
+    // Emergency stop: the owner can pause new jobs and releases if a
+    // critical bug is discovered, without redeploying the contract.
+    // Existing disputes can still be resolved by the arbitrator or
+    // force-refunded after timeout, even while paused.
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     function getJob(bytes32 jobId) external view jobExists(jobId) returns (Job memory) {

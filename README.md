@@ -112,7 +112,7 @@ Escrow logic now runs on an actual smart contract deployed on Arc Testnet, inste
 - `release(jobId)` — anyone can trigger release once the window has passed with no dispute
 - `resolve(jobId, releaseToWorker)` — only the designated arbitrator wallet can resolve a disputed job
 
-**Deployed address:** `0x91236ef0b18881a338cdb555be58bb7abb0dc76e` (Arc Testnet)
+**Deployed address:** `0x1783f4794fdb6cdaa93c98c117063833238494e4` (Arc Testnet)
 
 **Why this matters:** previously, if the server hosting this app went down or was compromised, funds sitting in an intermediate escrow wallet had no guaranteed resolution path — everything depended on this server's own logic staying correct and available. Now, the escrow, dispute window, and arbitration rules are enforced by the contract itself, independent of server uptime. The arbitrator is a separate wallet (the escrow wallet) from the client, so a client can't dispute and then "arbitrate" their own claim.
 
@@ -128,7 +128,7 @@ The smart contract was rewritten on top of OpenZeppelin's audited primitives, cl
 - **Input validation everywhere** — zero-address checks on the USDC token, arbitrator, and worker addresses; a positive-amount check on job creation.
 - **Clearer, prefixed error messages** (`"AgentEscrow: not arbitrator"`) and richer events (amounts included in `JobReleased`/`JobRefunded`) for easier debugging and auditing.
 
-**Currently deployed at:** `0x91236ef0b18881a338cdb555be58bb7abb0dc76e` (Arc Testnet) — replacing the earlier, simpler version at `0x2460d571...`.
+**Currently deployed at:** `0x1783f4794fdb6cdaa93c98c117063833238494e4` (Arc Testnet) — replacing the earlier, simpler version at `0x2460d571...`.
 
 ## Reliability: retries, auto-approval, and uptime
 
@@ -164,7 +164,11 @@ The homepage shows three banners explaining *what* protects each job, not just t
 
 The contract was redeployed with an explicit `ownerAddress` constructor parameter instead of relying on `Ownable(msg.sender)`. When deploying through Circle's Smart Contract Platform, `msg.sender` on-chain is Circle's own deployer address, not the wallet that requested the deployment — so the original contract had an owner nobody on this project actually controlled, making `setArbitrator()` and `setDisputeWindow()` permanently unusable. The fix: pass the intended owner explicitly. Verified by calling `owner()` on the new contract and confirming it matches the client wallet address, then successfully calling `setDisputeWindow(30)`.
 
-**Currently deployed at:** `0x91236ef0b18881a338cdb555be58bb7abb0dc76e` (Arc Testnet), dispute window set to 30 seconds.
+**Currently deployed at:** `0x1783f4794fdb6cdaa93c98c117063833238494e4` (Arc Testnet), dispute window set to 30 seconds.
+
+## Emergency pause
+
+The contract now inherits OpenZeppelin's `Pausable`. If a critical bug were ever found, the owner can call `pause()` to immediately block new jobs (`createJob`) and releases (`release`) — without redeploying the contract. Disputed jobs already in progress can still be arbitrated or force-refunded after timeout even while paused, so funds already in escrow are never permanently frozen. Verified end-to-end: paused the contract, confirmed `createJob` reverted, then called `unpause()` and confirmed normal operation resumed.
 
 ## Known limitations
 
