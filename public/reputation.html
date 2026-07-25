@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGuard · Reputation</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0D10; --panel:#14181D; --border:#232830; --text:#E8EAED;
+    --muted:#8B93A0; --blue:#2775CA; --green:#22C55E; --red:#EF4444;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;margin:0;padding:40px 24px;}
+  .wrap{max-width:900px;margin:0 auto;}
+  nav{display:flex;gap:18px;margin-bottom:28px;font-family:'JetBrains Mono',monospace;font-size:12px;flex-wrap:wrap;}
+  nav a{color:var(--muted);text-decoration:none;}
+  nav a.active{color:var(--text);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:.08em;margin-bottom:10px;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:32px;margin:0 0 12px;}
+  .sub{color:var(--muted);font-size:14.5px;margin-bottom:28px;}
+  .wallet-line{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:24px;}
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}
+  .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+  .stat-card .label{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;}
+  .stat-card .value{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;}
+  .bar-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;}
+  .bar-wrap .label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;}
+  .bar-track{width:100%;height:10px;background:#191E24;border-radius:100px;overflow:hidden;display:flex;}
+  .bar-fill-accepted{background:var(--green);height:100%;}
+  .bar-fill-rejected{background:var(--red);height:100%;}
+  .legend{display:flex;gap:20px;margin-top:12px;font-size:12px;color:var(--muted);}
+  .legend span{display:flex;align-items:center;gap:6px;}
+  .dot{width:8px;height:8px;border-radius:50%;}
+  .note{font-size:12.5px;color:var(--muted);margin-top:24px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a href="/">Home</a>
+    <a href="/how-it-works.html">How it works</a>
+    <a href="/security.html">Security</a>
+    <a href="/transactions.html">Transactions</a>
+    <a href="/reputation.html" class="active">Reputation</a>
+  </nav>
+
+  <div class="eyebrow">TRACK RECORD, TIED TO A WALLET</div>
+  <h1>Worker reputation</h1>
+  <p class="sub">Every completed job updates this worker's record, keyed by wallet address and stored persistently — not a session counter that resets on redeploy.</p>
+
+  <div id="repContainer"><div class="sub">Loading...</div></div>
+</div>
+
+<script>
+async function loadReputation() {
+  const container = document.getElementById('repContainer');
+  try {
+    const res = await fetch('/reputation');
+    const stats = await res.json();
+    const rejected = stats.totalJobs - stats.accepted;
+    const acceptedPct = stats.totalJobs > 0 ? (stats.accepted / stats.totalJobs * 100) : 0;
+    const rejectedPct = 100 - acceptedPct;
+
+    container.innerHTML = `
+      <div class="wallet-line"><i class="ti ti-wallet" style="vertical-align:-2px;margin-right:6px;"></i>Worker wallet: 0x690b1399d41bbc1d48ed77527e84d88da4e02cd4</div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="label">Total jobs</div><div class="value">${stats.totalJobs}</div></div>
+        <div class="stat-card"><div class="label">Accepted</div><div class="value" style="color:var(--green);">${stats.accepted}</div></div>
+        <div class="stat-card"><div class="label">Rejected</div><div class="value" style="color:var(--red);">${rejected}</div></div>
+        <div class="stat-card"><div class="label">Acceptance rate</div><div class="value">${stats.acceptanceRate}%</div></div>
+      </div>
+      <div class="bar-wrap">
+        <div class="label">Accepted vs rejected</div>
+        <div class="bar-track">
+          <div class="bar-fill-accepted" style="width:${acceptedPct}%;"></div>
+          <div class="bar-fill-rejected" style="width:${rejectedPct}%;"></div>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--green);"></span>Accepted (${stats.accepted})</span>
+          <span><span class="dot" style="background:var(--red);"></span>Rejected (${rejected})</span>
+        </div>
+      </div>
+      <p class="note">Reputation is persisted in a local SQLite database, keyed by wallet address. If AgentGuard ever supports multiple worker agents, each one builds an independent, portable track record instead of sharing one pool.</p>
+    `;
+  } catch (e) {
+    container.innerHTML = '<div class="sub">Could not load reputation data.</div>';
+  }
+}
+loadReputation();
+</script>
+</body>
+</html>
