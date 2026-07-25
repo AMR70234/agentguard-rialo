@@ -159,6 +159,22 @@ app.post('/admin/unpause', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/transactions/daily', (req, res) => {
+  const db = require('./db');
+  db.all(
+    `SELECT date(createdAt) as day, COUNT(*) as count
+     FROM jobs
+     GROUP BY day
+     ORDER BY day ASC
+     LIMIT 30`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
 app.get('/transactions', (req, res) => {
   getRecentTransactions(50, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
