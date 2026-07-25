@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AgentGuard · Arc Testnet</title>
@@ -136,6 +137,21 @@
   .dispute-timer{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--amber);}
   .dispute-btn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap;}
   .dispute-btn:hover{opacity:.9;}
+  .flow-box{display:grid;grid-template-columns:1fr 220px;gap:12px;margin-bottom:20px;}
+  .flow-diagram{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;}
+  .flow-diagram .label{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px;}
+  .flow-nodes{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+  .flow-node{flex:1;text-align:center;padding:12px 6px;border-radius:9px;background:var(--panel-2);border:1px solid var(--border);transition:all .3s;}
+  .flow-node.active{background:rgba(34,197,94,.12);border-color:var(--green);}
+  .flow-node i{font-size:18px;color:var(--text);}
+  .flow-node p{font-size:10.5px;margin:5px 0 0;color:var(--muted);}
+  .flow-arrow{font-size:14px;color:#5B6472;}
+  .flow-status{font-size:12px;color:var(--muted);margin-top:14px;min-height:16px;}
+  .trust-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;}
+  .trust-panel .label{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px;}
+  .trust-layer{display:flex;align-items:center;gap:7px;font-size:11px;color:#5B6472;margin-bottom:9px;transition:color .3s;}
+  .trust-layer.active{color:var(--green);}
+  .trust-layer i{font-size:14px;}
 </style>
 </head>
 <body>
@@ -192,6 +208,36 @@
       <div class="label">Acceptance rate</div>
       <div class="value" id="statRate">—</div>
     </div>
+
+  <div class="flow-box">
+    <div class="flow-diagram">
+      <div class="label">Job flow</div>
+      <div class="flow-nodes">
+        <div class="flow-node" id="flowClient">
+          <i class="ti ti-user"></i>
+          <p>Client</p>
+        </div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-node" id="flowEscrow">
+          <i class="ti ti-shield-lock"></i>
+          <p>Escrow</p>
+        </div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-node" id="flowWorker">
+          <i class="ti ti-robot"></i>
+          <p>Worker</p>
+        </div>
+      </div>
+      <div class="flow-status" id="flowStatus">Ready to run a job.</div>
+    </div>
+    <div class="trust-panel">
+      <div class="label">Trust layers</div>
+      <div class="trust-layer" id="trustLatch"><i class="ti ti-lock"></i><span>Latch policy</span></div>
+      <div class="trust-layer" id="trustChain"><i class="ti ti-link"></i><span>On-chain escrow</span></div>
+      <div class="trust-layer" id="trustVerify"><i class="ti ti-scale"></i><span>Independent check</span></div>
+      <div class="trust-layer" id="trustArbitrate"><i class="ti ti-gavel"></i><span>AI arbitration</span></div>
+    </div>
+  </div>
   </div>
 
   <div class="rail">
@@ -467,6 +513,18 @@ async function disputeCurrentJob() {
   }
 }
 
+function setFlowNode(id, active) {
+  document.getElementById(id).classList.toggle('active', active);
+}
+function setTrustLayer(id, active) {
+  document.getElementById(id).classList.toggle('active', active);
+}
+function resetFlow() {
+  ['flowClient','flowEscrow','flowWorker'].forEach(id => setFlowNode(id, false));
+  ['trustLatch','trustChain','trustVerify','trustArbitrate'].forEach(id => setTrustLayer(id, false));
+  document.getElementById('flowStatus').textContent = 'Ready to run a job.';
+}
+
 async function runJob(){
   const btn = document.getElementById('runBtn');
   const label = document.getElementById('runBtnLabel');
@@ -478,6 +536,7 @@ async function runJob(){
   clearLog(); setStatus('running','running'); setTypeChip(null);
 
   const wordCount = input.split(/\s+/).length;
+  resetFlow();
   addLine('▸', `Client agent submitted task <b>(${wordCount} words)</b>`);
   addLine('▸', 'Worker agent classifying and executing…', true);
 
@@ -504,12 +563,20 @@ async function runJob(){
       startDisputeCountdown(data.jobId, data.disputeWindowMs || 60000);
     }
     addLine('✓', `Result: <b>"${data.summary}"</b>`);
+    setFlowNode('flowClient', true);
+    setFlowNode('flowEscrow', true);
+    setTrustLayer('trustLatch', true);
+    setTrustLayer('trustChain', true);
+    document.getElementById('flowStatus').textContent = 'Funds locked in escrow...';
     addLine('$', `Escrowed fee: <b>${data.amount} USDC</b> (auto-priced by task length)`, true);
 
     pulseFlow('flowPulse1');
 
     if(data.accepted){
       entry.accepted = true;
+      setFlowNode('flowWorker', true);
+      setTrustLayer('trustVerify', true);
+      document.getElementById('flowStatus').textContent = 'Result verified — releasing funds.';
       addLine('✓', 'Result verified — releasing funds to worker');
       setTimeout(()=>{
         pulseFlow('flowPulse2');
