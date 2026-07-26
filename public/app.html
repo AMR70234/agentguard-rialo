@@ -167,6 +167,7 @@
 
   <nav style="display:flex;gap:18px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:12px;">
     <a href="/" style="color:var(--text);text-decoration:none;">Home</a>
+    <a href="/app.html" style="color:var(--muted);text-decoration:none;">Try it live</a>
     <a href="/how-it-works.html" style="color:var(--muted);text-decoration:none;">How it works</a>
     <a href="/security.html" style="color:var(--muted);text-decoration:none;">Security</a>
     <a href="/transactions.html" style="color:var(--muted);text-decoration:none;">Transactions</a>
@@ -284,9 +285,51 @@
       </div>
     </div>
   </div>
-  <div class="panel" style="text-align:center;padding:40px 24px;">
-    <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">Ready to see it in action?</p>
-    <a href="/app.html" class="primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;padding:14px 28px;font-size:15px;">Try it live →</a>
+
+  <div class="panel">
+    <div class="panel-row">
+      <label class="panel-label" for="taskInput">Task — the agent classifies this automatically</label>
+      <span class="counter" id="wordCount">0 words</span>
+    </div>
+    <textarea id="taskInput" oninput="updateCounter()" placeholder="Type anything: a passage to summarize, a review to analyze, or a question to answer. The agent figures out which.">Rialo is a developer-first Layer-1 blockchain built by Subzero Labs, designed to be the best blockchain for the agent economy. It features native webcalls that let on-chain programs communicate directly with AI agents, native timers for automatic deadline enforcement, and fast finality, enabling autonomous agents to transact and coordinate without human intervention.</textarea>
+
+    <div class="row-config">
+      <span class="price-tag" id="pricePreview">Estimated fee: 1 USDC</span>
+      <div class="presets">
+        <button class="preset-btn" onclick="loadPreset('arc')">Rialo description</button>
+        <button class="preset-btn" onclick="loadPreset('review')">Product review</button>
+        <button class="preset-btn" onclick="loadPreset('question')">Direct question</button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="runBtn" onclick="runJob()">
+        <span class="spinner"></span><span id="runBtnLabel">Run agent job</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <div class="ledger-head">
+      <span class="panel-label">Settlement log</span>
+      <div class="badges">
+        <span class="type-chip" id="typeChip" style="display:none;"></span>
+        <span class="status-chip" id="statusChip">idle</span>
+      </div>
+    </div>
+    <div class="log" id="log"><div class="empty">No job run yet. Press "Run agent job" to start.</div></div>
+    <div class="dispute-bar" id="disputeBar">
+      <span class="dispute-timer" id="disputeTimer">You have 30s to dispute this result</span>
+      <button class="dispute-btn" onclick="disputeCurrentJob()">Dispute this result</button>
+    </div>
+  </div>
+
+  <div class="history">
+    <div class="history-head">
+      <span class="panel-label">Transaction history</span>
+      <span class="counter" id="historyCount">0 runs this session</span>
+    </div>
+    <div id="historyBody"><div class="history-empty">Runs you complete will appear here.</div></div>
   </div>
 
   <footer>
