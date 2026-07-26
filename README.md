@@ -187,6 +187,10 @@ Beyond the single-page task runner, the site has seven linked pages, all reachab
 - **`/faq.html`** — an accordion FAQ covering the basics, Latch's role and actual benefit, contract security, the Rialo/SCALE connection, and honest limitations.
 - **`/compare.html`** — a side-by-side table contrasting a naive "agent pays agent" system against AgentGuard's actual protections.
 
+## A Latch integration bug, found and fixed
+
+After making Latch a full proxy for contract calls, `approve()` (a required step before `createJob`) started failing — because the policy only allowed the escrow contract's address, not the USDC token contract that `approve()` actually targets. Fixed by updating the policy's `contractAddress` rule from `equals` (one fixed address) to `in` (a list of two approved addresses: the escrow contract and the USDC token). A reminder that "proxy everything" needs the policy to cover every contract actually touched, not just the primary one.
+
 ## Known limitations
 
 - **Unaudited contract** — `AgentEscrow.sol` has not been professionally reviewed by a smart contract security firm; not intended for real funds yet, despite the added OpenZeppelin hardening.
