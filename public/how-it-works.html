@@ -9,7 +9,7 @@
 <style>
   :root{
     --bg:#0B0D10; --panel:#14181D; --panel-2:#191E24; --border:#232830; --text:#E8EAED;
-    --muted:#8B93A0; --blue:#2775CA; --green:#22C55E; --red:#EF4444; --amber:#F5A623;
+    --muted:#8B93A0; --blue:#2DD4BF; --green:#22C55E; --red:#EF4444; --amber:#F5A623;
   }
   *{box-sizing:border-box;}
   body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;margin:0;padding:40px 24px;}
@@ -30,20 +30,31 @@
   .pricing-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px;}
   .pricing-table th{text-align:left;color:var(--muted);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;}
   .pricing-table td{padding:8px 10px;border-bottom:1px solid var(--border);}
+
+  .wrap{padding-left:calc(190px + 40px) !important;}
+  .sidebar{position:fixed;top:0;left:0;width:190px;height:100vh;background:var(--panel);border-right:1px solid var(--border);padding:24px 14px;overflow-y:auto;}
+  .sidebar-brand{display:flex;align-items:center;gap:8px;margin-bottom:28px;padding:0 10px;}
+  .sidebar-brand img{width:26px;height:26px;border-radius:6px;}
+  .sidebar-brand span{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:var(--text);}
+  .sidebar-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--muted);font-size:12.5px;margin-bottom:2px;}
+  .sidebar-link i{font-size:17px;}
+  .sidebar-link:hover{background:var(--panel-2);color:var(--text);}
+  .sidebar-link.active{background:rgba(45,212,191,0.15);color:var(--blue);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav>
-    <a href="/">Home</a>
-    <a href="/app.html">Try it live</a>
-    <a href="/how-it-works.html" class="active">How it works</a>
-    <a href="/security.html">Security</a>
-    <a href="/transactions.html">Transactions</a>
-    <a href="/reputation.html">Reputation</a>
-    <a href="/faq.html" style="color:var(--muted);text-decoration:none;">FAQ</a>
-    <a href="/compare.html" style="color:var(--muted);text-decoration:none;">Compare</a>
-  </nav>
+  <div class="sidebar">
+    <div class="sidebar-brand"><img src="/favicon.png" alt="AgentGuard" /><span>AgentGuard</span></div>
+    <a href="/" class="sidebar-link"><i class="ti ti-home"></i>Home</a>
+    <a href="/my-wallet.html" class="sidebar-link"><i class="ti ti-wallet"></i>My Wallet</a>
+    <a href="/app.html" class="sidebar-link"><i class="ti ti-player-play"></i>Try it live</a>
+    <a href="/security.html" class="sidebar-link"><i class="ti ti-shield-lock"></i>Security</a>
+    <a href="/transactions.html" class="sidebar-link"><i class="ti ti-list-details"></i>Transactions</a>
+    <a href="/reputation.html" class="sidebar-link"><i class="ti ti-star"></i>Reputation</a>
+    <a href="/faq.html" class="sidebar-link"><i class="ti ti-help-circle"></i>FAQ</a>
+    <a href="/compare.html" class="sidebar-link"><i class="ti ti-scale"></i>Compare</a>
+  </div>
 
   <div class="eyebrow">FROM TASK TO SETTLEMENT</div>
   <h1>The full job lifecycle</h1>

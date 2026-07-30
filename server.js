@@ -11,6 +11,49 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Google OAuth: each logged-in user gets their own Circle wallet,
+// created automatically on first login and reused on future logins —
+// so identity persists across devices/browsers, unlike a cookie-only session.
+const session = require('express-session');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const { getOrCreateUserWallet } = require('./userWallets');
+
+app.use(session({
+  secret: process.env.ADMIN_SECRET || 'dev-secret',
+  resave: false,
+  saveUninitialized: false,
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((obj, done) => done(null, obj));
+
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: process.env.GOOGLE_CALLBACK_URL,
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const wallet = await getOrCreateUserWallet(profile.id, profile.emails[0].value);
+    done(null, { googleId: profile.id, email: profile.emails[0].value, wallet });
+  } catch (err) {
+    done(err);
+  }
+}));
+
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => {
+  res.redirect('/');
+});
+app.get('/auth/logout', (req, res) => {
+  req.logout(() => res.redirect('/'));
+});
+app.get('/auth/me', (req, res) => {
+  res.json(req.user || null);
+});
+
 // Simple auth middleware: protects every /admin/* endpoint with a shared secret.
 // The request must include: Authorization: Bearer <ADMIN_SECRET>
 function requireAdmin(req, res, next) {
@@ -32,7 +75,8 @@ app.post('/run-job', async (req, res) => {
 
   try {
     console.log('🚀 Job started...');
-    const result = await runEscrowJob(taskInput, amount);
+    const clientWallet = req.user ? req.user.wallet : null;
+    const result = await runEscrowJob(taskInput, amount, clientWallet);
 
     return res.json({
   accepted: result.accepted,
@@ -176,6 +220,7 @@ app.get('/transactions/daily', (req, res) => {
 });
 
 app.get('/transactions', (req, res) => {
+  const filterWallet = req.user ? req.user.wallet.walletAddress : null;
   getRecentTransactions(50, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     const parsed = rows.map(r => ({
@@ -188,7 +233,18 @@ app.get('/transactions', (req, res) => {
       txHash: r.txHash,
     }));
     res.json(parsed);
-  });
+  }, filterWallet);
+});
+
+app.get('/user-balance', async (req, res) => {
+  if (!req.user) return res.json({ loggedIn: false });
+  try {
+    const balRes = await client.getWalletTokenBalance({ id: req.user.wallet.walletId });
+    const token = balRes.data.tokenBalances.find(t => !t.token.isNative);
+    res.json({ loggedIn: true, walletAddress: req.user.wallet.walletAddress, balance: token ? token.amount : '0' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/balances', async (req, res) => {

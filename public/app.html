@@ -10,9 +10,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0B0D10; --panel:#14181D; --panel-2:#191E24; --panel-3:#1E242B;
-    --border:#232830; --border-soft:#1B2027; --text:#E8EAED; --muted:#6B7280; --muted-2:#4B5259;
-    --blue:#2775CA; --blue-glow:rgba(39,117,202,0.35);
+    --bg:#0A0E14; --panel:#0F141C; --panel-2:#151B24; --panel-3:#1E242B;
+    --border:#1E2530; --border-soft:#161C25; --text:#E8EAED; --muted:#6B7280; --muted-2:#4B5259;
+    --blue:#2DD4BF; --blue-glow:rgba(45,212,191,0.30); --sidebar-w:190px;
     --green:#22C55E; --amber:#F5A623; --red:#EF4444;
   }
   *{box-sizing:border-box;}
@@ -21,7 +21,22 @@
     background:radial-gradient(1200px 500px at 20% -10%, rgba(39,117,202,0.10), transparent), var(--bg);
     color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; padding:40px 20px 80px;
   }
-  .wrap{max-width:1080px;margin:0 auto;}
+  .wrap{max-width:1080px;margin:0 auto;padding-left:calc(var(--sidebar-w) + 40px);}
+  .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:var(--panel);border-right:1px solid var(--border);padding:24px 14px;overflow-y:auto;}
+  .sidebar-brand{display:flex;align-items:center;gap:8px;margin-bottom:28px;padding:0 10px;}
+  .sidebar-brand img{width:26px;height:26px;border-radius:6px;}
+  .sidebar-brand span{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:var(--text);}
+  .sidebar-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--muted);font-size:12.5px;margin-bottom:2px;transition:all .15s;}
+  .sidebar-link i{font-size:17px;}
+  .sidebar-link:hover{background:var(--panel-2);color:var(--text);}
+  .sidebar-link.active{background:var(--blue-glow);color:var(--blue);}
+  @media (max-width:768px){
+    .sidebar{transform:translateX(-100%);transition:transform .2s;z-index:100;}
+    .sidebar.open{transform:translateX(0);}
+    .wrap{padding-left:20px;}
+    .sidebar-toggle{display:flex !important;}
+  }
+  .sidebar-toggle{display:none;position:fixed;top:16px;left:16px;z-index:101;background:var(--panel);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;align-items:center;justify-content:center;color:var(--text);cursor:pointer;}
   a{text-decoration:none;} :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px;}
 
   .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:36px;flex-wrap:wrap;gap:12px;}
@@ -165,16 +180,18 @@
     </div>
   </div>
 
-  <nav style="display:flex;gap:18px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:12px;">
-    <a href="/" style="color:var(--text);text-decoration:none;">Home</a>
-    <a href="/app.html" style="color:var(--muted);text-decoration:none;">Try it live</a>
-    <a href="/how-it-works.html" style="color:var(--muted);text-decoration:none;">How it works</a>
-    <a href="/security.html" style="color:var(--muted);text-decoration:none;">Security</a>
-    <a href="/transactions.html" style="color:var(--muted);text-decoration:none;">Transactions</a>
-    <a href="/reputation.html" style="color:var(--muted);text-decoration:none;">Reputation</a>
-    <a href="/faq.html" style="color:var(--muted);text-decoration:none;">FAQ</a>
-    <a href="/compare.html" style="color:var(--muted);text-decoration:none;">Compare</a>
-  </nav>
+  <div class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu"><i class="ti ti-menu-2"></i></div>
+  <div class="sidebar">
+    <div class="sidebar-brand"><img src="/favicon.png" alt="AgentGuard" /><span>AgentGuard</span></div>
+    <a href="/" class="sidebar-link"><i class="ti ti-home"></i>Home</a>
+    <a href="/my-wallet.html" class="sidebar-link"><i class="ti ti-wallet"></i>My Wallet</a>
+    <a href="/app.html" class="sidebar-link active"><i class="ti ti-player-play"></i>Try it live</a>
+    <a href="/security.html" class="sidebar-link"><i class="ti ti-shield-lock"></i>Security</a>
+    <a href="/transactions.html" class="sidebar-link"><i class="ti ti-list-details"></i>Transactions</a>
+    <a href="/reputation.html" class="sidebar-link"><i class="ti ti-star"></i>Reputation</a>
+    <a href="/faq.html" class="sidebar-link"><i class="ti ti-help-circle"></i>FAQ</a>
+    <a href="/compare.html" class="sidebar-link"><i class="ti ti-scale"></i>Compare</a>
+  </div>
   <header>
     <div class="eyebrow">ESCROW-BACKED · AUTO-CLASSIFIED · USDC NATIVE GAS</div>
     <h1>Two agents. One <span>ledger</span>.<br/>Settlement without a human in the loop.</h1>

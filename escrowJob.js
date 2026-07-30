@@ -56,7 +56,9 @@ function pollTransaction(txId, maxTries = 10) {
 // Escrow now happens on-chain via the AgentEscrow smart contract, instead
 // of a direct Circle transfer. The contract itself enforces the dispute
 // window and holds the funds — not this server.
-async function runEscrowJob(taskInput, amount) {
+async function runEscrowJob(taskInput, amount, clientWallet) {
+  const clientWalletId = (clientWallet && clientWallet.walletId) || process.env.WALLET_ID;
+  const clientWalletAddress = (clientWallet && clientWallet.walletAddress) || process.env.WALLET_ADDRESS;
   if (!amount) amount = calculatePrice(taskInput);
 
   const spendCheck = checkAndRecordDailySpend(amount);
@@ -75,14 +77,14 @@ async function runEscrowJob(taskInput, amount) {
   const jobId = '0x' + crypto.createHash('sha256').update(crypto.randomUUID()).digest('hex');
 
   // 🔥 Auto-approve USDC first
-  const approved = await approveUSDC(amount);
+  const approved = await approveUSDC(amount, clientWalletId);
   if (!approved) {
     return { accepted: false, disputable: false, summary: "USDC approval failed - please check wallet balance", taskType: "error", amount, finalTx: null, stats: null };
   }
 
   console.log(`On-chain: creating job ${jobId}, escrowing ${amount} USDC...`);
   const createRes = await callContract({
-    walletId: process.env.WALLET_ID,
+    walletId: clientWalletId,
     abiFunctionSignature: 'createJob(bytes32,address,uint256)',
     abiParameters: [jobId, process.env.WORKER_WALLET_ADDRESS, toUnits(amount)],
   });
@@ -98,7 +100,7 @@ async function runEscrowJob(taskInput, amount) {
   console.log(`Result: "${taskResult.result}"`);
 
   if (taskResult.accepted) {
-    pendingJobs.set(jobId, { status: 'pending', amount, taskResult, taskInput });
+    pendingJobs.set(jobId, { status: 'pending', amount, taskResult, taskInput, clientWalletAddress });
 
     const timer = setTimeout(async () => {
       const job = pendingJobs.get(jobId);
@@ -113,7 +115,7 @@ async function runEscrowJob(taskInput, amount) {
         job.status = 'released';
         job.finalTx = releaseRes.data;
         await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
-        recordTransaction(jobId, 'released', amount, taskInput, taskResult, releaseTx.txHash);
+        recordTransaction(jobId, 'released', amount, taskInput, taskResult, releaseTx.txHash, clientWalletAddress);
         console.log(`On-chain auto-release for job ${jobId}: ${releaseRes.data.id}`);
       } catch (err) {
         console.error(`Auto-release failed for job ${jobId}:`, err.message);
@@ -138,7 +140,7 @@ async function runEscrowJob(taskInput, amount) {
     // Since the worker itself rejected the result, we dispute and immediately
     // resolve in the client's favor using the escrow wallet as arbitrator.
     await callContract({
-      walletId: process.env.WALLET_ID,
+      walletId: clientWalletId,
       abiFunctionSignature: 'dispute(bytes32)',
       abiParameters: [jobId],
     });
@@ -151,7 +153,7 @@ async function runEscrowJob(taskInput, amount) {
 
     const stats = await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
     const refundTx = await pollTransaction(resolveRes.data.id);
-    recordTransaction(jobId, 'refunded', amount, taskInput, taskResult, refundTx.txHash);
+    recordTransaction(jobId, 'refunded', amount, taskInput, taskResult, refundTx.txHash, clientWalletAddress);
 
     return {
       accepted: false,
@@ -280,7 +282,7 @@ async function resolveArbitration(jobId, decision) {
   job.finalTx = resolveRes.data;
   await recordJob(releaseToWorker, process.env.WORKER_WALLET_ADDRESS);
   const resolveTx = await pollTransaction(resolveRes.data.id);
-  recordTransaction(jobId, job.status, job.amount, job.taskInput, job.taskResult, resolveTx.txHash);
+  recordTransaction(jobId, job.status, job.amount, job.taskInput, job.taskResult, resolveTx.txHash, job.clientWalletAddress);
 
   console.log(`On-chain arbitration on job ${jobId}: ${job.status} (${resolveRes.data.id})`);
   return { ok: true, status: job.status, finalTx: resolveRes.data };
@@ -295,17 +297,18 @@ function getJobStatus(jobId) {
 module.exports = { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration, calculatePrice };
 
 // 🔥 NEW: Function to approve USDC for the escrow contract
-async function approveUSDC(amount) {
+async function approveUSDC(amount, approverWalletId) {
   const { callContract } = require('./contractClient');
   const USDC_ADDRESS = process.env.USDC_TOKEN_ADDRESS || '0x3600000000000000000000000000000000000000';
   const CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS;
   const amountUnits = toUnits(amount);
+  const walletIdToUse = approverWalletId || process.env.WALLET_ID;
   
   console.log(`📤 Approving ${amount} USDC for contract: ${CONTRACT_ADDRESS}...`);
   
   try {
     const approveRes = await callContract({
-      walletId: process.env.WALLET_ID,
+      walletId: walletIdToUse,
       contractAddress: USDC_ADDRESS,
       abiFunctionSignature: 'approve(address,uint256)',
       abiParameters: [CONTRACT_ADDRESS, amountUnits],

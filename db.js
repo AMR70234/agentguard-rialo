@@ -26,31 +26,33 @@ db.serialize(() => {
 
   // جدول الوظائف المعلقة (Pending Jobs)
   db.run(`ALTER TABLE jobs ADD COLUMN txHash TEXT`, () => {}); // ignore error if column exists
+  db.run(`ALTER TABLE jobs ADD COLUMN walletAddress TEXT`, () => {}); // ignore error if column exists
   db.run(`CREATE TABLE IF NOT EXISTS jobs (
     jobId TEXT PRIMARY KEY,
     status TEXT NOT NULL,
     amount TEXT NOT NULL,
     taskResult TEXT,
     taskInput TEXT,
+    walletAddress TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 });
 
-function recordTransaction(jobId, status, amount, taskInput, taskResult, txHash) {
+function recordTransaction(jobId, status, amount, taskInput, taskResult, txHash, walletAddress) {
   db.run(
-    `INSERT OR REPLACE INTO jobs (jobId, status, amount, taskResult, taskInput, txHash)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [jobId, status, amount, JSON.stringify(taskResult || null), taskInput || null, txHash || null],
+    `INSERT OR REPLACE INTO jobs (jobId, status, amount, taskResult, taskInput, txHash, walletAddress)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [jobId, status, amount, JSON.stringify(taskResult || null), taskInput || null, txHash || null, walletAddress || null],
     (err) => { if (err) console.error('Failed to record transaction:', err.message); }
   );
 }
 
-function getRecentTransactions(limit, callback) {
-  db.all(
-    'SELECT * FROM jobs ORDER BY createdAt DESC LIMIT ?',
-    [limit || 50],
-    callback
-  );
+function getRecentTransactions(limit, callback, walletAddress) {
+  if (walletAddress) {
+    db.all('SELECT * FROM jobs WHERE walletAddress = ? ORDER BY createdAt DESC LIMIT ?', [walletAddress, limit || 50], callback);
+  } else {
+    db.all('SELECT * FROM jobs ORDER BY createdAt DESC LIMIT ?', [limit || 50], callback);
+  }
 }
 
 module.exports = db;

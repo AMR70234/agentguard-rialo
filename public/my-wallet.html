@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGuard · My Wallet</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E14; --panel:#0F141C; --panel-2:#151B24; --border:#1E2530; --text:#E8EAED;
+    --muted:#6B7280; --blue:#2DD4BF; --green:#22C55E; --red:#EF4444; --amber:#F5A623;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;margin:0;padding:0;}
+  .wrap{max-width:900px;margin:0 auto;padding:40px 24px 40px calc(190px + 40px);}
+  .sidebar{position:fixed;top:0;left:0;width:190px;height:100vh;background:var(--panel);border-right:1px solid var(--border);padding:24px 14px;overflow-y:auto;}
+  .sidebar-brand{display:flex;align-items:center;gap:8px;margin-bottom:28px;padding:0 10px;}
+  .sidebar-brand img{width:26px;height:26px;border-radius:6px;}
+  .sidebar-brand span{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:var(--text);}
+  .sidebar-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--muted);font-size:12.5px;margin-bottom:2px;}
+  .sidebar-link i{font-size:17px;}
+  .sidebar-link:hover{background:var(--panel-2);color:var(--text);}
+  .sidebar-link.active{background:rgba(45,212,191,0.15);color:var(--blue);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:.08em;margin-bottom:10px;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:28px;margin:0 0 20px;}
+  .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+  .stats-row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px;}
+  .label{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;}
+  .value{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;color:var(--muted);font-weight:500;padding:10px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;}
+  td{padding:10px;border-bottom:1px solid var(--border);}
+  .status-pill{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 9px;border-radius:100px;}
+  .status-pill.released{color:var(--green);background:rgba(34,197,94,.1);}
+  .status-pill.refunded{color:var(--red);background:rgba(239,68,68,.1);}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 0;}
+  .login-prompt{text-align:center;padding:80px 20px;}
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-brand"><img src="/favicon.png" alt="AgentGuard" /><span>AgentGuard</span></div>
+    <a href="/" class="sidebar-link"><i class="ti ti-home"></i>Home</a>
+    <a href="/my-wallet.html" class="sidebar-link active"><i class="ti ti-wallet"></i>My Wallet</a>
+    <a href="/security.html" class="sidebar-link"><i class="ti ti-shield-lock"></i>Security</a>
+    <a href="/transactions.html" class="sidebar-link"><i class="ti ti-list-details"></i>Transactions</a>
+    <a href="/reputation.html" class="sidebar-link"><i class="ti ti-star"></i>Reputation</a>
+    <a href="/faq.html" class="sidebar-link"><i class="ti ti-help-circle"></i>FAQ</a>
+    <a href="/compare.html" class="sidebar-link"><i class="ti ti-scale"></i>Compare</a>
+  </div>
+
+  <div class="wrap">
+    <div class="eyebrow">YOUR PERSONAL WALLET</div>
+    <h1>My Wallet</h1>
+    <div id="content"><div class="empty">Loading...</div></div>
+  </div>
+
+<script>
+async function loadMyWallet() {
+  const content = document.getElementById('content');
+  try {
+    const userRes = await fetch('/auth/me');
+    const user = await userRes.json();
+    if (!user) {
+      content.innerHTML = `
+        <div class="login-prompt">
+          <div style="width:56px;height:56px;border-radius:50%;background:rgba(45,212,191,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+            <i class="ti ti-wallet" style="font-size:26px;color:var(--blue);"></i>
+          </div>
+          <h2 style="font-size:18px;font-weight:500;margin:0 0 8px;">Your wallet, your history</h2>
+          <p style="color:var(--muted);font-size:13px;margin:0 0 24px;max-width:340px;margin-left:auto;margin-right:auto;line-height:1.5;">Sign in to get your own Circle wallet, tracked separately from every other visitor — with its own balance and job history.</p>
+          <a href="/auth/google" style="display:inline-flex;align-items:center;gap:8px;background:#fff;color:#3c4043;text-decoration:none;padding:10px 20px;border-radius:8px;font-family:'Inter',sans-serif;font-size:13.5px;font-weight:500;border:1px solid #dadce0;">
+            <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H24v7.9h11.3c-1.1 5.3-5.7 8.9-11.3 8.9-6.8 0-12.4-5.6-12.4-12.4S17.2 12.5 24 12.5c3.1 0 6 1.2 8.1 3.1l5.9-5.9C34.4 6.5 29.5 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5c10.2 0 19-7.4 19-19 0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 12.5 24 12.5c3.1 0 6 1.2 8.1 3.1l5.9-5.9C34.4 6.5 29.5 4.5 24 4.5c-7.5 0-14 4.2-17.7 10.2z"/><path fill="#4CAF50" d="M24 43.5c5.4 0 10.2-1.8 13.9-5l-6.4-5.4c-1.9 1.4-4.5 2.4-7.5 2.4-5.5 0-10.2-3.6-11.3-8.7l-6.6 5.1C9.9 39.3 16.4 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H24v7.9h11.3c-.5 2.6-2 4.8-4.1 6.3l6.4 5.4C41.4 36.9 43.5 31 43.5 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+            Sign in with Google
+          </a>
+        </div>
+      `;
+      return;
+    }
+
+    const balRes = await fetch('/user-balance');
+    const balData = await balRes.json();
+
+    const txRes = await fetch('/transactions');
+    const txRows = await txRes.json();
+
+    content.innerHTML = `
+      <div class="stats-row">
+        <div class="stat-card"><div class="label">Wallet address</div><div class="value" style="font-size:13px;font-family:monospace;">${user.wallet.walletAddress}</div></div>
+        <div class="stat-card"><div class="label">Balance</div><div class="value">${balData.balance} USDC</div></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:20px;">Signed in as <b>${user.email}</b></p>
+      <table>
+        <thead><tr><th>Time</th><th>Status</th><th>Task</th><th>Amount</th></tr></thead>
+        <tbody>
+          ${txRows.length ? txRows.map(r => `
+            <tr>
+              <td>${new Date(r.createdAt).toLocaleString()}</td>
+              <td><span class="status-pill ${r.status}">${r.status}</span></td>
+              <td>${(r.taskResult && r.taskResult.result) ? r.taskResult.result.slice(0,60) : (r.taskInput||'').slice(0,60)}</td>
+              <td>${r.amount} USDC</td>
+            </tr>
+          `).join('') : '<tr><td colspan="4" class="empty">No jobs yet. Run one from the homepage.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    content.innerHTML = '<div class="empty">Could not load your wallet data.</div>';
+  }
+}
+loadMyWallet();
+</script>
+</body>
+</html>
