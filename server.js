@@ -54,6 +54,20 @@ app.get('/auth/me', (req, res) => {
   res.json(req.user || null);
 });
 
+app.get('/auth/welcome-status', async (req, res) => {
+  if (!req.user) return res.json({ shouldShowWelcome: false });
+  const { hasSeenWelcome } = require('./userWallets');
+  const seen = await hasSeenWelcome(req.user.googleId);
+  res.json({ shouldShowWelcome: !seen });
+});
+
+app.post('/auth/welcome-seen', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Not signed in' });
+  const { markWelcomeSeen } = require('./userWallets');
+  await markWelcomeSeen(req.user.googleId);
+  res.json({ ok: true });
+});
+
 // Simple auth middleware: protects every /admin/* endpoint with a shared secret.
 // The request must include: Authorization: Bearer <ADMIN_SECRET>
 function requireAdmin(req, res, next) {
@@ -234,6 +248,101 @@ app.get('/transactions', (req, res) => {
     }));
     res.json(parsed);
   }, filterWallet);
+});
+
+app.post('/fund-my-wallet', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Not signed in' });
+
+  const { canFund, recordFunding, DAILY_FUNDING_LIMIT } = require('./db');
+  const { latchCreateTransaction } = require('./latchCircleClient');
+
+  const FUND_AMOUNT = 2; // USDC per request
+
+  canFund(req.user.googleId, FUND_AMOUNT, async (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.allowed) {
+      return res.status(429).json({
+        error: `Daily funding limit reached ($${DAILY_FUNDING_LIMIT}/day per account). Already used $${result.alreadyFunded} today.`,
+      });
+    }
+
+    try {
+      const tx = await latchCreateTransaction({
+        walletId: process.env.WALLET_ID,
+        tokenId: process.env.USDC_TOKEN_ID,
+        destinationAddress: req.user.wallet.walletAddress,
+        amount: FUND_AMOUNT,
+      });
+      recordFunding(req.user.googleId, FUND_AMOUNT, () => {});
+      res.json({ ok: true, amount: FUND_AMOUNT, transaction: tx });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+});
+
+// Peer-to-peer USDC transfer between two signed-in AgentGuard users.
+// Same daily limit table as fund-my-wallet, same Latch-protected transfer.
+app.post('/p2p-send', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Not signed in' });
+  const { recipientEmail, amount } = req.body;
+  const amountNum = parseFloat(amount);
+  if (!recipientEmail || isNaN(amountNum) || amountNum <= 0) {
+    return res.status(400).json({ error: 'recipientEmail and a positive amount are required' });
+  }
+  const { findUserByEmail, canSendP2P, recordP2PSend, DAILY_FUNDING_LIMIT } = require('./db');
+  const { latchCreateTransaction } = require('./latchCircleClient');
+  findUserByEmail(recipientEmail, async (err, recipient) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!recipient) return res.status(404).json({ error: 'No AgentGuard user found with that email' });
+    if (recipient.googleId === req.user.googleId) {
+      return res.status(400).json({ error: "You can't send to yourself" });
+    }
+
+    // Check the sender actually has enough balance before attempting the transfer.
+    try {
+      const balRes = await client.getWalletTokenBalance({ id: req.user.wallet.walletId });
+      const token = balRes.data.tokenBalances.find(t => !t.token.isNative);
+      const currentBalance = token ? parseFloat(token.amount) : 0;
+      if (currentBalance < amountNum) {
+        return res.status(400).json({ error: `Insufficient balance. You have ${currentBalance} USDC, tried to send ${amountNum} USDC.` });
+      }
+    } catch (error) {
+      return res.status(500).json({ error: 'Could not verify your balance: ' + error.message });
+    }
+
+    canSendP2P(req.user.googleId, amountNum, async (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!result.allowed) {
+        return res.status(429).json({
+          error: `Daily send limit reached ($${DAILY_FUNDING_LIMIT}/day per account). Already used $${result.alreadyFunded} today.`,
+        });
+      }
+      try {
+        const tx = await latchCreateTransaction({
+          walletId: req.user.wallet.walletId,
+          tokenId: process.env.USDC_TOKEN_ID,
+          destinationAddress: recipient.walletAddress,
+          amount: amountNum,
+        });
+        recordP2PSend(req.user.googleId, amountNum, () => {});
+        const { recordP2PTransfer } = require('./db');
+        recordP2PTransfer(req.user.googleId, req.user.email, recipient.googleId, recipient.email, amountNum, tx.data ? tx.data.id : null, () => {});
+        res.json({ ok: true, amount: amountNum, to: recipient.email, transaction: tx });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+  });
+});
+
+app.get('/p2p-history', (req, res) => {
+  if (!req.user) return res.json([]);
+  const { getP2PHistory } = require('./db');
+  getP2PHistory(req.user.googleId, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
 });
 
 app.get('/user-balance', async (req, res) => {

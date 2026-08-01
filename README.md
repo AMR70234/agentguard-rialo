@@ -206,6 +206,20 @@ After making Latch a full proxy for contract calls, `approve()` (a required step
 - Add a safe way to rotate the arbitrator address without a full contract redeploy.
 - Support multiple worker agents competing for jobs, chosen by price and wallet-tracked reputation.
 
+## Personal accounts, Google-linked wallets, and P2P transfers
+
+Visitors can optionally sign in with Google. On first sign-in, a dedicated Circle wallet is created automatically and permanently linked to that Google account — signing in again (even from a different device) always returns the same wallet, balance, and history. Signed-in users see a first-time welcome modal explaining the wallet, and their own address/balance override the shared demo wallet across the homepage and the live app.
+
+**Data isolation:** the Transactions page and Reputation page filter to only the signed-in user's own jobs when logged in — not the full shared history every anonymous visitor sees.
+
+**Wallet funding, rate-limited per account:** a "Fund my wallet" button on the My Wallet page requests test USDC through the same Latch-protected transfer endpoint used elsewhere in the project — capped at $6/day per Google account (tracked in a dedicated daily_funding table), sitting inside a larger $100/day cap enforced by Latch itself at the infrastructure level.
+
+**Peer-to-peer transfers:** signed-in users can send USDC directly to another AgentGuard user by email — the email is only used to look the recipient up; the actual transfer, balance checks, and history all reference wallet addresses, not emails, keeping the interaction closer to how a real agent-to-agent economy would identify counterparties. Sending is blocked if it would exceed the sender's real on-chain balance or their $6/day send limit (shared with wallet funding), and every transfer is recorded in a dedicated p2p_transfers table, visible as a sent/received history on the My Wallet page.
+
+## Static analysis: Slither
+
+Ran Slither directly against AgentEscrow.sol (after resolving a Windows-specific solc-select and OpenZeppelin import-resolution setup). Result: no critical or high-severity findings. Flagged items were standard-severity notes — a reentrancy warning already mitigated by OpenZeppelin's ReentrancyGuard, and timestamp-based comparisons that are an accepted pattern for dispute windows measured in minutes/hours, not something an attacker can meaningfully exploit at that granularity.
+
 ## Status
 
 Experimental. Built to explore what a security-hardened version of an autonomous agent payment system looks like in practice.

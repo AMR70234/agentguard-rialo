@@ -643,6 +643,38 @@ async function loadAuthStatus() {
   }
 }
 loadAuthStatus();
+checkWelcomeModal();
+
+async function checkWelcomeModal() {
+  try {
+    const res = await fetch('/auth/welcome-status');
+    const data = await res.json();
+    if (data.shouldShowWelcome) showWelcomeModal();
+  } catch (e) {}
+}
+
+function showWelcomeModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,20,.85);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:32px;max-width:380px;text-align:center;">
+      <div style="width:52px;height:52px;border-radius:50%;background:rgba(45,212,191,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+        <i class="ti ti-wallet" style="font-size:24px;color:var(--blue);"></i>
+      </div>
+      <h2 style="font-size:18px;font-weight:500;margin:0 0 10px;">Welcome to AgentGuard</h2>
+      <p style="color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 20px;">Your own Circle wallet was just created — tracked separately from every other visitor. It starts empty, so use <b>"Fund my wallet"</b> on the My Wallet page to get test USDC before running your first job.</p>
+      <a href="/my-wallet.html" style="display:block;background:var(--blue);color:#0A0E14;text-decoration:none;padding:10px;border-radius:8px;font-size:13.5px;font-weight:600;margin-bottom:10px;">Go to My Wallet</a>
+      <button onclick="dismissWelcomeModal()" style="background:transparent;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;">Got it, dismiss</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  window._welcomeOverlay = overlay;
+}
+
+async function dismissWelcomeModal() {
+  if (window._welcomeOverlay) window._welcomeOverlay.remove();
+  try { await fetch('/auth/welcome-seen', { method: 'POST' }); } catch (e) {}
+}
 </script>
 </body>
 </html>

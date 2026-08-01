@@ -36,9 +36,13 @@
   .status-pill.refunded{color:var(--red);background:rgba(239,68,68,.1);}
   .empty{color:var(--muted);font-size:13px;text-align:center;padding:40px 0;}
   .login-prompt{text-align:center;padding:80px 20px;}
+  .toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:10px;z-index:200;}
+  .toast{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:12.5px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+  .toast.err{border-color:rgba(239,68,68,.4);color:#FCA5A5;} .toast.ok{border-color:rgba(34,197,94,.4);color:#86EFAC;}
 </style>
 </head>
 <body>
+<div class="toasts" id="toasts"></div>
   <div class="sidebar">
     <div class="sidebar-brand"><img src="/favicon.png" alt="AgentGuard" /><span>AgentGuard</span></div>
     <a href="/" class="sidebar-link"><i class="ti ti-home"></i>Home</a>
@@ -90,7 +94,26 @@ async function loadMyWallet() {
         <div class="stat-card"><div class="label">Wallet address</div><div class="value" style="font-size:13px;font-family:monospace;">${user.wallet.walletAddress}</div></div>
         <div class="stat-card"><div class="label">Balance</div><div class="value">${balData.balance} USDC</div></div>
       </div>
-      <p style="font-size:12.5px;color:var(--muted);margin-bottom:20px;">Signed in as <b>${user.email}</b></p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <p style="font-size:12.5px;color:var(--muted);margin:0;">Signed in as <b>${user.email}</b></p>
+        <button id="fundBtn" onclick="fundWallet()" style="background:var(--blue);color:#0A0E14;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;">+ Fund my wallet</button>
+      </div>
+
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:24px;">
+        <div class="label" style="margin-bottom:10px;">Send USDC to another AgentGuard user</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="p2pEmail" type="email" placeholder="recipient@email.com" style="flex:2;min-width:180px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12.5px;" />
+          <input id="p2pAmount" type="number" step="0.1" min="0.1" placeholder="Amount" style="flex:1;min-width:80px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12.5px;" />
+          <button id="p2pBtn" onclick="sendP2P()" style="background:var(--blue);color:#0A0E14;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">Send</button>
+        </div>
+        <p style="font-size:10.5px;color:var(--muted);margin:8px 0 0;">Recipient must have signed in to AgentGuard before. Shares the same $6/day limit as wallet funding.</p>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <div class="label" style="margin-bottom:10px;">P2P transfer history</div>
+        <div id="p2pHistory"><div class="empty">Loading...</div></div>
+      </div>
+
       <table>
         <thead><tr><th>Time</th><th>Status</th><th>Task</th><th>Amount</th></tr></thead>
         <tbody>
@@ -105,11 +128,111 @@ async function loadMyWallet() {
         </tbody>
       </table>
     `;
+    loadP2PHistory();
   } catch (e) {
     content.innerHTML = '<div class="empty">Could not load your wallet data.</div>';
   }
 }
 loadMyWallet();
+
+async function loadP2PHistory() {
+  const container = document.getElementById('p2pHistory');
+  try {
+    const userRes = await fetch('/auth/me');
+    const user = await userRes.json();
+    if (!user) { container.innerHTML = ''; return; }
+
+    const res = await fetch('/p2p-history');
+    const rows = await res.json();
+
+    if (!rows.length) {
+      container.innerHTML = '<div class="empty" style="padding:16px 0;">No transfers yet.</div>';
+      return;
+    }
+
+    container.innerHTML = rows.map(r => {
+      const isSent = r.fromGoogleId === user.googleId;
+      const otherAddr = isSent ? r.toWalletAddress : r.fromWalletAddress;
+      const shortAddr = otherAddr ? otherAddr.slice(0,6) + '...' + otherAddr.slice(-4) : 'unknown';
+      const label = isSent ? `Sent to ${shortAddr}` : `Received from ${shortAddr}`;
+      const color = isSent ? 'var(--red)' : 'var(--green)';
+      const sign = isSent ? '-' : '+';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <span>${label}</span>
+        <span style="color:${color};font-family:monospace;">${sign}${r.amount} USDC</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<div class="empty">Could not load transfer history.</div>';
+  }
+}
+
+function toast(msg, type='err'){
+  const c = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type==='ok'?'ok':'err');
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(()=>el.remove(), 4500);
+}
+
+async function fundWallet() {
+  const btn = document.getElementById('fundBtn');
+  btn.disabled = true;
+  btn.textContent = 'Funding...';
+  toast('Requesting test USDC via Latch-protected transfer...', 'ok');
+  try {
+    const res = await fetch('/fund-my-wallet', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ Funded ${data.amount} USDC`, 'ok');
+      setTimeout(loadMyWallet, 2000);
+    } else {
+      toast(`❌ ${data.error}`, 'err');
+    }
+  } catch (e) {
+    toast('❌ Could not reach the server.', 'err');
+  }
+  btn.disabled = false;
+  btn.textContent = '+ Fund my wallet';
+}
+
+async function sendP2P() {
+  const emailInput = document.getElementById('p2pEmail');
+  const amountInput = document.getElementById('p2pAmount');
+  const btn = document.getElementById('p2pBtn');
+  const recipientEmail = emailInput.value.trim();
+  const amount = amountInput.value;
+
+  if (!recipientEmail || !amount) {
+    toast('❌ Enter both an email and an amount.', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  toast('Sending USDC via Latch-protected transfer...', 'ok');
+  try {
+    const res = await fetch('/p2p-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipientEmail, amount }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ Sent ${data.amount} USDC to ${data.to}`, 'ok');
+      emailInput.value = '';
+      amountInput.value = '';
+      setTimeout(() => { loadMyWallet(); loadP2PHistory(); }, 2000);
+    } else {
+      toast(`❌ ${data.error}`, 'err');
+    }
+  } catch (e) {
+    toast('❌ Could not reach the server.', 'err');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Send';
+}
 </script>
 </body>
 </html>

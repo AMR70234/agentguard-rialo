@@ -409,6 +409,20 @@ async function loadBalances(){
       el.classList.remove('loading');
       el.querySelector('.num').textContent = Number(data[k]).toFixed(2);
     });
+
+    // If logged in, override the client card with the user's own wallet.
+    try {
+      const userRes = await fetch('/auth/me');
+      const user = await userRes.json();
+      if (user) {
+        document.getElementById('clientAddr').textContent = user.wallet.walletAddress;
+        const userBalRes = await fetch('/user-balance');
+        const userBalData = await userBalRes.json();
+        if (userBalData.loggedIn) {
+          document.getElementById('clientBalance').querySelector('.num').textContent = Number(userBalData.balance).toFixed(2);
+        }
+      }
+    } catch(e) {}
   }catch(e){
     ['client','escrow','worker'].forEach(k=>{
       document.getElementById(k+'Balance').querySelector('.num').textContent = '—';

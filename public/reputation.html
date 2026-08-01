@@ -102,6 +102,37 @@ async function loadReputation() {
   }
 }
 loadReputation();
+loadClientHistory();
+
+async function loadClientHistory() {
+  try {
+    const userRes = await fetch('/auth/me');
+    const user = await userRes.json();
+    if (!user) return;
+
+    const txRes = await fetch('/transactions');
+    const txRows = await txRes.json();
+    const total = txRows.length;
+    const released = txRows.filter(r => r.status === 'released').length;
+    const refunded = total - released;
+    const rate = total > 0 ? Math.round((released / total) * 100) : 0;
+
+    const section = document.createElement('div');
+    section.style.marginTop = '36px';
+    section.innerHTML = `
+      <div class="eyebrow">YOUR RECORD, AS A CLIENT</div>
+      <h2 style="font-size:20px;margin:0 0 6px;">${user.email}</h2>
+      <p class="sub">Jobs you've submitted with your own wallet, since signing in.</p>
+      <div class="stats-row">
+        <div class="stat-card"><div class="label">Jobs submitted</div><div class="value">${total}</div></div>
+        <div class="stat-card"><div class="label">Released</div><div class="value" style="color:var(--green);">${released}</div></div>
+        <div class="stat-card"><div class="label">Refunded</div><div class="value" style="color:var(--red);">${refunded}</div></div>
+        <div class="stat-card"><div class="label">Success rate</div><div class="value">${rate}%</div></div>
+      </div>
+    `;
+    document.querySelector('.wrap').appendChild(section);
+  } catch (e) {}
+}
 </script>
 </body>
 </html>

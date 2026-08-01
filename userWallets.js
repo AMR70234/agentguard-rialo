@@ -14,8 +14,26 @@ function initUserWalletsTable() {
     walletAddress TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  db.run(`ALTER TABLE user_wallets ADD COLUMN hasSeenWelcome INTEGER DEFAULT 0`, () => {});
 }
 initUserWalletsTable();
+
+function markWelcomeSeen(googleId) {
+  return new Promise((resolve, reject) => {
+    db.run('UPDATE user_wallets SET hasSeenWelcome = 1 WHERE googleId = ?', [googleId], (err) => {
+      if (err) reject(err); else resolve();
+    });
+  });
+}
+
+function hasSeenWelcome(googleId) {
+  return new Promise((resolve, reject) => {
+    db.get('SELECT hasSeenWelcome FROM user_wallets WHERE googleId = ?', [googleId], (err, row) => {
+      if (err) return reject(err);
+      resolve(row ? !!row.hasSeenWelcome : false);
+    });
+  });
+}
 
 function getStoredWallet(googleId) {
   return new Promise((resolve, reject) => {
@@ -53,4 +71,4 @@ async function getOrCreateUserWallet(googleId, email) {
   return { walletId: w.id, walletAddress: w.address };
 }
 
-module.exports = { getOrCreateUserWallet };
+module.exports = { getOrCreateUserWallet, markWelcomeSeen, hasSeenWelcome };
