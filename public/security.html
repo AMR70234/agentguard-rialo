@@ -76,7 +76,7 @@
         <table class="policy-table">
           <tr><th>Policy</th><th>Endpoint</th><th>Limits</th></tr>
           <tr><td>AgentGuard (OpenAI)</td><td>/v1/chat/completions</td><td>60 req/min, $5/day, gpt-4o-mini / gpt-4o only</td></tr>
-          <tr><td>AgentGuard-Circle</td><td>/transactions/transfer</td><td>2 req/min, 10 USDC max/transfer, 20 USDC/day</td></tr>
+          <tr><td>AgentGuard-Circle</td><td>/transactions/transfer</td><td>2 req/min, 10 USDC max/transfer, $100/day shared cap (plus a $6/day per-account limit for wallet funding/P2P transfers)</td></tr>
           <tr><td>AgentGuard-Contract</td><td>/transactions/contractExecution</td><td>10 req/min, contractAddress must be either AgentEscrow or the USDC token contract</td></tr>
         </table>
       </div>
@@ -125,7 +125,7 @@
       </div>
       <div class="limitation-item">
         <i class="ti ti-alert-triangle"></i>
-        <p><b>Shared daily limit.</b> The spend cap is global across all visitors, not per-user or per-session.</p>
+        <p><b>Shared daily limit for escrow jobs.</b> The $100/day cap for job escrow is global across all visitors — but wallet funding and P2P transfers now have a separate $6/day limit tracked per signed-in Google account.</p>
       </div>
       <div class="limitation-item">
         <i class="ti ti-alert-triangle"></i>
