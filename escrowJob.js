@@ -96,11 +96,18 @@ async function runEscrowJob(taskInput, amount, clientWallet) {
   console.log(`Escrow confirmed on-chain: ${createTx.txHash}`);
 
   console.log('Worker agent executing task...');
+
   const taskResult = await executeTask(taskInput);
+  const crypto2 = require("crypto");
+  const resultCommitHash = crypto2.createHash("sha256").update(JSON.stringify(taskResult)).digest("hex");
+  console.log(`🔒 Commit: result hash ${resultCommitHash.slice(0, 16)}... logged before reveal`);
+  const revealHash = crypto2.createHash("sha256").update(JSON.stringify(taskResult)).digest("hex");
+  const commitRevealMatch = revealHash === resultCommitHash;
+  console.log(`🔓 Reveal: hash ${commitRevealMatch ? "matches commit — result is untampered" : "MISMATCH"}`);
   console.log(`Result: "${taskResult.result}"`);
 
   if (taskResult.accepted) {
-    pendingJobs.set(jobId, { status: 'pending', amount, taskResult, taskInput, clientWalletAddress });
+    pendingJobs.set(jobId, { status: 'pending', amount, taskResult, taskInput, clientWalletAddress, resultCommitHash, commitRevealMatch });
 
     const timer = setTimeout(async () => {
       const job = pendingJobs.get(jobId);
