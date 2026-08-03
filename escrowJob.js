@@ -242,6 +242,7 @@ async function disputeJob(jobId) {
   });
 
   job.status = 'awaiting_arbitration';
+  job.stuckSince = Date.now();
   console.log(`Job ${jobId} disputed on-chain: ${disputeRes.data.id}`);
 
   // Immediately try AI arbitration so the client/worker don't wait on a human
@@ -298,7 +299,43 @@ function getJobStatus(jobId) {
   return { status: job.status, finalTx: job.finalTx || null };
 }
 
-module.exports = { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration, calculatePrice };
+// Simple keeper: checks every job stuck in "awaiting_arbitration" and, if
+// it's been stuck longer than the safety threshold, calls forceRefund()
+// on-chain itself — no human needs to click a button. Mirrors the contract's
+// own ARBITRATION_TIMEOUT (7 days), but uses a much shorter threshold here
+// since this demo can't realistically wait 7 real days to prove it works.
+const KEEPER_STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — short enough to demo, long enough not to fire on a normal manual-review case
+
+async function runKeeperSweep() {
+  const stuckJobs = [];
+  for (const [jobId, job] of pendingJobs.entries()) {
+    if (job.status === 'awaiting_arbitration' && job.stuckSince) {
+      const stuckFor = Date.now() - job.stuckSince;
+      if (stuckFor > KEEPER_STUCK_THRESHOLD_MS) {
+        stuckJobs.push(jobId);
+      }
+    }
+  }
+
+  for (const jobId of stuckJobs) {
+    console.log(`⏰ Keeper: job ${jobId} has been stuck in arbitration too long — force-refunding automatically.`);
+    try {
+      const forceRefundRes = await callContract({
+        walletId: process.env.ESCROW_WALLET_ID,
+        abiFunctionSignature: 'forceRefund(bytes32)',
+        abiParameters: [jobId],
+      });
+      await pollTransaction(forceRefundRes.data.id);
+      const job = pendingJobs.get(jobId);
+      if (job) job.status = 'refunded';
+      console.log(`✅ Keeper: job ${jobId} force-refunded successfully.`);
+    } catch (err) {
+      console.error(`❌ Keeper: force-refund failed for job ${jobId}:`, err.message);
+    }
+  }
+}
+
+module.exports = { runEscrowJob, disputeJob, getJobStatus, listPendingArbitration, resolveArbitration, calculatePrice, runKeeperSweep };
 
 // 🔥 NEW: Function to approve USDC for the escrow contract
 async function approveUSDC(amount, approverWalletId) {

@@ -398,3 +398,10 @@ setInterval(async () => {
     // السيرفر شغال، مش مشكلة
   }
 }, 5 * 60 * 1000); // كل 5 دقائق
+
+// Keeper: sweeps for jobs stuck in arbitration too long and force-refunds
+// them on-chain automatically, without any human clicking a button.
+const { runKeeperSweep } = require('./escrowJob');
+setInterval(() => {
+  runKeeperSweep().catch(err => console.error('Keeper sweep failed:', err.message));
+}, 15 * 1000); // every 15 seconds for demo purposes
