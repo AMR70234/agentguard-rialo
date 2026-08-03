@@ -172,7 +172,7 @@ async function runEscrowJob(taskInput, amount, clientWallet) {
 // decides immediately, so the system scales without waiting for a human.
 // Falls back to "awaiting_arbitration" (for manual review via /admin.html)
 // if the AI arbitrator itself fails or can't reach a confident decision.
-async function getSingleVerdict(taskInput, result, taskType) {
+async function getSingleVerdict(taskInput, result, taskType, model) {
   const { latchChatCompletion } = require('./latchClient');
   const verdict = await latchChatCompletion([
     {
@@ -183,7 +183,7 @@ async function getSingleVerdict(taskInput, result, taskType) {
       role: 'user',
       content: `Task type: ${taskType}\nOriginal task: ${taskInput}\nWorker's result: ${result}\n\nShould this be RELEASE or REFUND? Respond with only that one word.`,
     },
-  ], { model: 'gpt-4o', max_tokens: 5 });
+  ], { model: model || 'gpt-4o', max_tokens: 5 });
 
   const decision = verdict.trim().toUpperCase();
   if (decision.startsWith('RELEASE')) return 'release';
@@ -197,11 +197,15 @@ async function getSingleVerdict(taskInput, result, taskType) {
 // so a job doesn't sit stuck in the admin queue for an avoidable coin-flip tie.
 async function aiArbitrate(taskInput, result, taskType) {
   try {
-    let votes = await Promise.all([
-      getSingleVerdict(taskInput, result, taskType),
-      getSingleVerdict(taskInput, result, taskType),
-      getSingleVerdict(taskInput, result, taskType),
+    // Multi-model weighted judging: two votes from gpt-4o (weighted 2x
+    // each since it's the stronger model) and one from gpt-4o-mini as a
+    // genuinely independent second model, not just a repeated call.
+    const [voteA, voteB, voteC] = await Promise.all([
+      getSingleVerdict(taskInput, result, taskType, 'gpt-4o'),
+      getSingleVerdict(taskInput, result, taskType, 'gpt-4o'),
+      getSingleVerdict(taskInput, result, taskType, 'gpt-4o-mini'),
     ]);
+    let votes = [voteA, voteA, voteB, voteB, voteC]; // gpt-4o votes double-weighted
 
     for (let round = 0; round < 2; round++) {
       console.log(`Arbitration votes (round ${round + 1}): [${votes.join(', ')}]`);
