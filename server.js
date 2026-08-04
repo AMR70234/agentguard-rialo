@@ -358,10 +358,11 @@ app.get('/user-balance', async (req, res) => {
 
 app.get('/balances', async (req, res) => {
   try {
-    const [clientBal, escrowBal, workerBal] = await Promise.all([
+    const [clientBal, escrowBal, workerBal, worker2Bal] = await Promise.all([
       client.getWalletTokenBalance({ id: process.env.WALLET_ID }),
       client.getWalletTokenBalance({ id: process.env.ESCROW_WALLET_ID }),
       client.getWalletTokenBalance({ id: process.env.WORKER_WALLET_ID }),
+      client.getWalletTokenBalance({ id: process.env.WORKER2_WALLET_ID }),
     ]);
 
     const getUsdc = (balanceResponse) => {
@@ -373,6 +374,7 @@ app.get('/balances', async (req, res) => {
       client: getUsdc(clientBal),
       escrow: getUsdc(escrowBal),
       worker: getUsdc(workerBal),
+      worker2: getUsdc(worker2Bal),
     });
   } catch (error) {
     console.error('❌ Error in /balances:', error.message);

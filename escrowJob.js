@@ -8,6 +8,25 @@ const { recordTransaction } = require('./db');
 const DISPUTE_WINDOW_MS = 33000; // matches contract's 30s dispute window + 3s buffer
 const pendingJobs = new Map(); // jobId -> { taskResult, amount, timer, status }
 
+// Two competing worker agents, each with an independent wallet-linked
+// reputation record. Before every job, the client scores both and picks
+// the winner — a real, runtime decision, not a fixed assignment.
+const WORKERS = [
+  { walletAddress: process.env.WORKER_WALLET_ADDRESS, priceMultiplier: 1.0 },
+  { walletAddress: process.env.WORKER2_WALLET_ADDRESS, priceMultiplier: 0.9 },
+];
+
+async function chooseWorker() {
+  const { getStats } = require('./reputation');
+  const scored = await Promise.all(WORKERS.map(async (w) => {
+    const stats = await getStats(w.walletAddress).catch(() => ({ acceptanceRate: 100 }));
+    const score = (stats.acceptanceRate || 100) - (w.priceMultiplier * 5);
+    return { ...w, score };
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0];
+}
+
 const DAILY_USDC_LIMIT = 20;
 let dailySpend = { date: new Date().toDateString(), total: 0 };
 
@@ -59,6 +78,7 @@ function pollTransaction(txId, maxTries = 10) {
 async function runEscrowJob(taskInput, amount, clientWallet) {
   const clientWalletId = (clientWallet && clientWallet.walletId) || process.env.WALLET_ID;
   const clientWalletAddress = (clientWallet && clientWallet.walletAddress) || process.env.WALLET_ADDRESS;
+  const worker = await chooseWorker();
   if (!amount) amount = calculatePrice(taskInput);
 
   const spendCheck = checkAndRecordDailySpend(amount);
@@ -86,7 +106,7 @@ async function runEscrowJob(taskInput, amount, clientWallet) {
   const createRes = await callContract({
     walletId: clientWalletId,
     abiFunctionSignature: 'createJob(bytes32,address,uint256)',
-    abiParameters: [jobId, process.env.WORKER_WALLET_ADDRESS, toUnits(amount)],
+    abiParameters: [jobId, worker.walletAddress, toUnits(amount)],
   });
   const createTx = await pollTransaction(createRes.data.id);
   console.log("🔥 createTx:", JSON.stringify(createTx, null, 2));
@@ -121,7 +141,7 @@ async function runEscrowJob(taskInput, amount, clientWallet) {
         const releaseTx = await pollTransaction(releaseRes.data.id);
         job.status = 'released';
         job.finalTx = releaseRes.data;
-        await recordJob(true, process.env.WORKER_WALLET_ADDRESS);
+        await recordJob(true, worker.walletAddress);
         recordTransaction(jobId, 'released', amount, taskInput, taskResult, releaseTx.txHash, clientWalletAddress);
         console.log(`On-chain auto-release for job ${jobId}: ${releaseRes.data.id}`);
       } catch (err) {
@@ -158,7 +178,7 @@ async function runEscrowJob(taskInput, amount, clientWallet) {
       abiParameters: [jobId, false],
     });
 
-    const stats = await recordJob(false, process.env.WORKER_WALLET_ADDRESS);
+    const stats = await recordJob(false, worker.walletAddress);
     const refundTx = await pollTransaction(resolveRes.data.id);
     recordTransaction(jobId, 'refunded', amount, taskInput, taskResult, refundTx.txHash, clientWalletAddress);
 

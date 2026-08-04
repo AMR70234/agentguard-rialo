@@ -304,6 +304,17 @@
       </div>
     </div>
   </div>
+  <div style="max-width:320px;margin:0 auto 24px;">
+    <div class="agent" style="border:1px dashed var(--border);">
+      <div class="agent-top">
+        <div><div class="agent-role">Worker Agent 2</div><div class="agent-name">Competing on price</div></div>
+        <div class="balance loading" id="worker2Balance"><div class="num">···</div><div class="lbl">USDC</div></div>
+      </div>
+      <div class="addr-row"><span class="addr" id="worker2Addr">0x25a66670a799246cebe4e2fff19b0210a51d1f7a</span>
+        <button class="icon-btn" onclick="copyAddr('worker2Addr', this)" aria-label="Copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+      </div>
+    </div>
+  </div>
   <div class="panel" style="text-align:center;padding:40px 24px;">
     <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">Ready to see it in action?</p>
     <a href="/app.html" class="primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;padding:14px 28px;font-size:15px;">Try it live →</a>
@@ -376,14 +387,14 @@ async function loadBalances(){
     const data = await res.json();
     if(!res.ok) throw new Error(data.error||'failed');
 
-    ['client','escrow','worker'].forEach(k=>{
+    ['client','escrow','worker','worker2'].forEach(k=>{
       const el = document.getElementById(k+'Balance');
       el.classList.remove('loading');
       el.querySelector('.num').textContent = Number(data[k]).toFixed(2);
     });
     await applyUserWalletOverride();
   }catch(e){
-    ['client','escrow','worker'].forEach(k=>{
+    ['client','escrow','worker','worker2'].forEach(k=>{
       document.getElementById(k+'Balance').querySelector('.num').textContent = '—';
     });
   }
