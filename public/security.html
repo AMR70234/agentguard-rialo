@@ -104,7 +104,7 @@
       <i class="ti ti-gavel"></i>
       <div>
         <h3>AI arbitration with majority voting</h3>
-        <p>A disputed job is reviewed by an independent model, called three separate times. The majority verdict decides release or refund — reducing the chance a single inconsistent call settles the outcome. A rare tie routes to a password-protected admin dashboard for manual review.</p>
+        <p>A disputed job is reviewed by two genuinely different models — two double-weighted votes from gpt-4o and one independent vote from gpt-4o-mini — not one model called three times. The majority verdict decides release or refund. A rare tie routes to a password-protected admin dashboard for manual review, and a keeper network automatically force-refunds jobs stuck in that queue past a safety threshold.</p>
       </div>
     </div>
 
@@ -113,6 +113,20 @@
       <div>
         <h3>Emergency pause</h3>
         <p>The contract inherits OpenZeppelin's Pausable. If a critical bug were ever found, the contract owner can immediately block new jobs and releases without redeploying — existing disputes can still be arbitrated or force-refunded even while paused, so escrowed funds are never permanently frozen.</p>
+      </div>
+    </div>
+    <div class="layer-card">
+      <i class="ti ti-clock-check"></i>
+      <div>
+        <h3>Keeper network</h3>
+        <p>Jobs stuck in manual arbitration aren't left waiting on a human indefinitely. A lightweight keeper sweeps periodically and calls the contract's forceRefund() automatically once a job has been stuck past a safety threshold — real onchain automation for the unhappy path, not just the happy one.</p>
+      </div>
+    </div>
+    <div class="layer-card">
+      <i class="ti ti-fingerprint"></i>
+      <div>
+        <h3>Commit-Reveal integrity</h3>
+        <p>The worker's result is hashed the instant it's produced, before it's shown to anyone. A second hash computed at reveal time is compared against the commit — cryptographic proof the exposed result wasn't swapped or tampered with between execution and display.</p>
       </div>
     </div>
   </div>
@@ -130,7 +144,7 @@
       </div>
       <div class="limitation-item">
         <i class="ti ti-alert-triangle"></i>
-        <p><b>Single worker agent.</b> Wallet-linked reputation is ready, but there's only one worker to track today.</p>
+        <p><b>Keeper threshold is short for demo purposes.</b> The keeper sweep uses a 5-minute stuck threshold to make the automatic force-refund demonstrable; a production deployment would tune this much closer to the contract's own 7-day timeout.</p>
       </div>
       <div class="limitation-item">
         <i class="ti ti-alert-triangle"></i>
