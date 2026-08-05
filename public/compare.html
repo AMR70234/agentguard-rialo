@@ -110,6 +110,26 @@
         <td class="cell-naive"><i class="ti ti-x"></i>No way to send funds to another user directly</td>
         <td class="cell-guard"><i class="ti ti-check"></i>Send USDC to any signed-in user, wallet-based and rate-limited</td>
       </tr>
+      <tr>
+        <td class="row-label">Verification quality</td>
+        <td class="cell-naive"><i class="ti ti-x"></i>One model, one opinion</td>
+        <td class="cell-guard"><i class="ti ti-check"></i>Two independent models, weighted majority vote</td>
+      </tr>
+      <tr>
+        <td class="row-label">Stuck disputes</td>
+        <td class="cell-naive"><i class="ti ti-x"></i>Sit in a queue forever if no one checks</td>
+        <td class="cell-guard"><i class="ti ti-check"></i>Keeper network auto-resolves after a threshold</td>
+      </tr>
+      <tr>
+        <td class="row-label">Result integrity</td>
+        <td class="cell-naive"><i class="ti ti-x"></i>No proof the shown result wasn't altered</td>
+        <td class="cell-guard"><i class="ti ti-check"></i>Commit-Reveal hash proves the result is untampered</td>
+      </tr>
+      <tr>
+        <td class="row-label">Worker competition</td>
+        <td class="cell-naive"><i class="ti ti-x"></i>Single fixed worker</td>
+        <td class="cell-guard"><i class="ti ti-check"></i>Two competing workers, chosen by price + reputation + A2A experience</td>
+      </tr>
     </tbody>
   </table>
 
