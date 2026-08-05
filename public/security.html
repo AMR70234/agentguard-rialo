@@ -47,6 +47,11 @@
   .sidebar-link i{font-size:17px;}
   .sidebar-link:hover{background:var(--panel-2);color:var(--text);}
   .sidebar-link.active{background:rgba(45,212,191,0.15);color:var(--blue);}
+  .layer-card details summary{cursor:pointer;list-style:none;}
+  .layer-card details summary::-webkit-details-marker{display:none;}
+  .layer-card details summary h3{display:inline;}
+  .layer-card details summary::after{content:' +';color:var(--muted);font-size:13px;}
+  .layer-card details[open] summary::after{content:' \2212';}
 </style>
 </head>
 <body>
@@ -72,30 +77,30 @@
     <div class="layer-card">
       <i class="ti ti-lock"></i>
       <div>
-        <h3>Latch-scoped access</h3>
+        <details><summary><h3>Latch-scoped access</h3></summary>
         <p>The agent never holds a raw OpenAI or Circle API key. Every action — AI processing, USDC transfers, and smart contract execution — is routed through an independently-scoped Latch policy that enforces endpoint allowlists, rate limits, and spend caps before the request ever reaches OpenAI or Circle.</p>
         <table class="policy-table">
           <tr><th>Policy</th><th>Endpoint</th><th>Limits</th></tr>
           <tr><td>AgentGuard (OpenAI)</td><td>/v1/chat/completions</td><td>60 req/min, $5/day, gpt-4o-mini / gpt-4o only</td></tr>
           <tr><td>AgentGuard-Circle</td><td>/transactions/transfer</td><td>2 req/min, 10 USDC max/transfer, $100/day shared cap (plus a $6/day per-account limit for wallet funding/P2P transfers)</td></tr>
           <tr><td>AgentGuard-Contract</td><td>/transactions/contractExecution</td><td>10 req/min, contractAddress must be either AgentEscrow or the USDC token contract</td></tr>
-        </table>
+        </table></details>
       </div>
     </div>
 
     <div class="layer-card">
       <i class="ti ti-scale"></i>
       <div>
-        <h3>Independent verification</h3>
-        <p>The worker executes each task with one model. A separate model reviews the result before any funds move — so no model grades its own work. Confidently-stated facts about anything time-sensitive are rejected unless they carry an explicit outdated-information caveat.</p>
+        <details><summary><h3>Independent verification</h3></summary>
+        <p>The worker executes each task with one model. A separate model reviews the result before any funds move — so no model grades its own work. Confidently-stated facts about anything time-sensitive are rejected unless they carry an explicit outdated-information caveat.</p></details>
       </div>
     </div>
 
     <div class="layer-card">
       <i class="ti ti-link"></i>
       <div>
-        <h3>On-chain escrow</h3>
-        <p>Funds are held by a smart contract deployed on Arc Testnet, not by this application server. Built on OpenZeppelin's audited primitives with reentrancy protection, and a safety valve: if a dispute sits unresolved for 7 days, anyone can trigger a refund to the client.</p>
+        <details><summary><h3>On-chain escrow</h3></summary>
+        <p>Funds are held by a smart contract deployed on Arc Testnet, not by this application server. Built on OpenZeppelin's audited primitives with reentrancy protection, and a safety valve: if a dispute sits unresolved for 7 days, anyone can trigger a refund to the client.</p></details>
         <a class="contract-link" href="https://testnet.arcscan.app/address/0x1783f4794fdb6cdaa93c98c117063833238494e4" target="_blank" rel="noopener">View contract on Arc Explorer ↗</a>
       </div>
     </div>
@@ -103,30 +108,30 @@
     <div class="layer-card">
       <i class="ti ti-gavel"></i>
       <div>
-        <h3>AI arbitration with majority voting</h3>
-        <p>A disputed job is reviewed by two genuinely different models — two double-weighted votes from gpt-4o and one independent vote from gpt-4o-mini — not one model called three times. The majority verdict decides release or refund. A rare tie routes to a password-protected admin dashboard for manual review, and a keeper network automatically force-refunds jobs stuck in that queue past a safety threshold.</p>
+        <details><summary><h3>AI arbitration with majority voting</h3></summary>
+        <p>A disputed job is reviewed by two genuinely different models — two double-weighted votes from gpt-4o and one independent vote from gpt-4o-mini — not one model called three times. The majority verdict decides release or refund. A rare tie routes to a password-protected admin dashboard for manual review, and a keeper network automatically force-refunds jobs stuck in that queue past a safety threshold.</p></details>
       </div>
     </div>
 
     <div class="layer-card">
       <i class="ti ti-player-pause"></i>
       <div>
-        <h3>Emergency pause</h3>
-        <p>The contract inherits OpenZeppelin's Pausable. If a critical bug were ever found, the contract owner can immediately block new jobs and releases without redeploying — existing disputes can still be arbitrated or force-refunded even while paused, so escrowed funds are never permanently frozen.</p>
+        <details><summary><h3>Emergency pause</h3></summary>
+        <p>The contract inherits OpenZeppelin's Pausable. If a critical bug were ever found, the contract owner can immediately block new jobs and releases without redeploying — existing disputes can still be arbitrated or force-refunded even while paused, so escrowed funds are never permanently frozen.</p></details>
       </div>
     </div>
     <div class="layer-card">
       <i class="ti ti-clock-check"></i>
       <div>
-        <h3>Keeper network</h3>
-        <p>Jobs stuck in manual arbitration aren't left waiting on a human indefinitely. A lightweight keeper sweeps periodically and calls the contract's forceRefund() automatically once a job has been stuck past a safety threshold — real onchain automation for the unhappy path, not just the happy one.</p>
+        <details><summary><h3>Keeper network</h3></summary>
+        <p>Jobs stuck in manual arbitration aren't left waiting on a human indefinitely. A lightweight keeper sweeps periodically and calls the contract's forceRefund() automatically once a job has been stuck past a safety threshold — real onchain automation for the unhappy path, not just the happy one.</p></details>
       </div>
     </div>
     <div class="layer-card">
       <i class="ti ti-fingerprint"></i>
       <div>
-        <h3>Commit-Reveal integrity</h3>
-        <p>The worker's result is hashed the instant it's produced, before it's shown to anyone. A second hash computed at reveal time is compared against the commit — cryptographic proof the exposed result wasn't swapped or tampered with between execution and display.</p>
+        <details><summary><h3>Commit-Reveal integrity</h3></summary>
+        <p>The worker's result is hashed the instant it's produced, before it's shown to anyone. A second hash computed at reveal time is compared against the commit — cryptographic proof the exposed result wasn't swapped or tampered with between execution and display.</p></details>
       </div>
     </div>
   </div>
