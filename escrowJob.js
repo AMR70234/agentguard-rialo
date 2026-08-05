@@ -2,7 +2,7 @@ require('dotenv').config();
 const crypto = require('crypto');
 const { callContract } = require('./contractClient');
 const { executeTask } = require('./task');
-const { recordJob } = require('./reputation');
+const { recordJob, broadcastA2AMessage } = require('./reputation');
 const { recordTransaction } = require('./db');
 
 const DISPUTE_WINDOW_MS = 33000; // matches contract's 30s dispute window + 3s buffer
@@ -142,6 +142,7 @@ async function runEscrowJob(taskInput, amount, clientWallet) {
         job.status = 'released';
         job.finalTx = releaseRes.data;
         await recordJob(true, worker.walletAddress);
+        broadcastA2AMessage(worker.walletAddress, taskResult.taskType, 'accepted');
         recordTransaction(jobId, 'released', amount, taskInput, taskResult, releaseTx.txHash, clientWalletAddress);
         console.log(`On-chain auto-release for job ${jobId}: ${releaseRes.data.id}`);
       } catch (err) {

@@ -319,6 +319,10 @@
     <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">Ready to see it in action?</p>
     <a href="/app.html" class="primary" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;padding:14px 28px;font-size:15px;">Try it live →</a>
   </div>
+  <div class="panel" style="padding:24px;">
+    <p style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Agent-to-Agent Log</p>
+    <div id="a2aLog" style="font-size:12.5px;color:var(--muted);">Loading...</div>
+  </div>
 
   <footer>
     Backend: Circle Developer-Controlled Wallets · Network: Arc Testnet · Model: gpt-4o-mini ·
@@ -400,6 +404,28 @@ async function loadBalances(){
   }
 }
 loadBalances();
+loadA2ALog();
+
+async function loadA2ALog() {
+  const el = document.getElementById('a2aLog');
+  try {
+    const res = await fetch('/agent-messages');
+    const rows = await res.json();
+    if (!rows.length) {
+      el.textContent = 'No agent messages yet \u2014 run a job to see workers broadcast their outcomes.';
+      return;
+    }
+    el.innerHTML = rows.map(r => {
+      const shortAddr = r.fromWallet.slice(0,6) + '...' + r.fromWallet.slice(-4);
+      const color = r.outcome === 'accepted' ? 'var(--green)' : 'var(--red)';
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="color:${color};">\u25CF</span> <span style="font-family:monospace;">${shortAddr}</span>: ${r.message}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.textContent = 'Could not load agent messages.';
+  }
+}
 
 // Central function: checks login status once, then updates BOTH the
 // client address card AND the client balance consistently — avoids

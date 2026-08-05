@@ -50,3 +50,42 @@ async function getStats(walletAddress) {
 }
 
 module.exports = { recordJob, getStats };
+
+// A2A (Agent-to-Agent) communication: a simple shared broadcast log.
+// When a worker completes a job, it broadcasts a short message other
+// workers can read before taking on new jobs \u2014 a lightweight form of
+// agent-to-agent knowledge sharing, not a full messaging protocol, but a
+// real mechanism for one agent's outcome to inform another agent's behavior.
+function initA2ATable() {
+  db.run(`CREATE TABLE IF NOT EXISTS agent_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fromWallet TEXT NOT NULL,
+    taskType TEXT,
+    outcome TEXT,
+    message TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+}
+initA2ATable();
+
+function broadcastA2AMessage(fromWallet, taskType, outcome) {
+  const message = outcome === 'accepted'
+    ? `Completed a ${taskType} task successfully \u2014 pattern recognized.`
+    : `A ${taskType} task was rejected \u2014 flagging as a harder case.`;
+  db.run(
+    `INSERT INTO agent_messages (fromWallet, taskType, outcome, message) VALUES (?, ?, ?, ?)`,
+    [fromWallet, taskType, outcome, message],
+    (err) => { if (err) console.error('A2A broadcast failed:', err.message); }
+  );
+}
+
+function getRecentA2AMessages(limit, callback) {
+  db.all(
+    'SELECT * FROM agent_messages ORDER BY createdAt DESC LIMIT ?',
+    [limit || 10],
+    callback
+  );
+}
+
+module.exports.broadcastA2AMessage = broadcastA2AMessage;
+module.exports.getRecentA2AMessages = getRecentA2AMessages;

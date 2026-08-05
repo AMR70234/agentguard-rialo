@@ -383,6 +383,14 @@ app.get('/balances', async (req, res) => {
 });
 
 // GET /reputation
+app.get('/agent-messages', (req, res) => {
+  const { getRecentA2AMessages } = require('./reputation');
+  getRecentA2AMessages(10, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 app.get('/reputation', async (req, res) => {
   res.json(await getStats());
 });
