@@ -195,7 +195,7 @@ After making Latch a full proxy for contract calls, `approve()` (a required step
 
 - **Unaudited contract** — `AgentEscrow.sol` has not been professionally reviewed by a smart contract security firm; not intended for real funds yet, despite the added OpenZeppelin hardening.
 - **Shared daily limit** — the spend cap is global across all visitors, not per-user or per-session.
-- **Single worker agent** — wallet-linked reputation is ready, but there is only one worker to track today.
+- **Keeper threshold is short for demo purposes** — the keeper sweep uses a 5-minute stuck threshold to make the automatic force-refund demonstrable; a production deployment would tune this much closer to the contract's own 7-day `ARBITRATION_TIMEOUT`.
 - **`forceRefund` favors the client by design** — if arbitration times out after 7 days, funds return to the client rather than the worker, on the assumption that an unresolved dispute should not leave a worker paid without review.
 
 ## What's next
@@ -223,3 +223,16 @@ Ran Slither directly against AgentEscrow.sol (after resolving a Windows-specific
 ## Status
 
 Experimental. Built to explore what a security-hardened version of an autonomous agent payment system looks like in practice.
+
+## Advanced dispute handling: multi-model judging, keeper network, commit-reveal
+
+Four additions on top of the arbitration flow described above:
+
+- **Multi-model weighted judging.** Arbitration votes now come from two genuinely different models, not one model called three times: two double-weighted votes from `gpt-4o` and one independent vote from `gpt-4o-mini`. All five votes are logged for full transparency.
+- **Keeper network.** Jobs stuck in manual arbitration for too long are no longer left waiting on a human. A lightweight keeper sweeps every 15 seconds and calls the contract's `forceRefund()` automatically once a job has been stuck past the threshold — tested end-to-end with a real on-chain force-refund transaction.
+- **Commit-Reveal (application layer).** The worker's result is hashed the instant it's produced, before it's shown to anyone. A second hash computed at reveal time is compared against the commit — cryptographic proof the exposed result wasn't swapped or tampered with between execution and display.
+- **Agent-to-Agent (A2A) communication.** Workers broadcast a short message to a shared log whenever a job outcome is decided. These messages are visible live on the homepage, and they feed back into worker selection: a worker with more successful broadcasts gets a small experience-based edge the next time `chooseWorker()` runs — turning the log from a passive display into a real signal shaping autonomous decisions.
+
+## Multi-worker competition
+
+Two independent worker agents, each with its own wallet, wallet-linked reputation record, and A2A broadcast history. Before every job, the client scores both workers on acceptance rate, price, and accumulated A2A experience, and picks the winner — a real, runtime decision. The smart contract required zero changes to support this; it already accepts any worker address as a parameter.
