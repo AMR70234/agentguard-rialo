@@ -17,10 +17,11 @@ const WORKERS = [
 ];
 
 async function chooseWorker() {
-  const { getStats } = require('./reputation');
+  const { getStats, getA2AExperience } = require('./reputation');
   const scored = await Promise.all(WORKERS.map(async (w) => {
     const stats = await getStats(w.walletAddress).catch(() => ({ acceptanceRate: 100 }));
-    const score = (stats.acceptanceRate || 100) - (w.priceMultiplier * 5);
+    const experience = await getA2AExperience(w.walletAddress).catch(() => 0);
+    const score = (stats.acceptanceRate || 100) - (w.priceMultiplier * 5) + (experience * 2); // A2A experience gives a small edge
     return { ...w, score };
   }));
   scored.sort((a, b) => b.score - a.score);

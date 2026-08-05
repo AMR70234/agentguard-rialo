@@ -89,3 +89,22 @@ function getRecentA2AMessages(limit, callback) {
 
 module.exports.broadcastA2AMessage = broadcastA2AMessage;
 module.exports.getRecentA2AMessages = getRecentA2AMessages;
+
+// Counts how many successful A2A broadcasts a worker has made for a
+// specific task type \u2014 used as an "experience" signal in worker selection,
+// so a worker with more successful summarize jobs gets a small edge on
+// the next summarize job, not just overall acceptance rate.
+function getA2AExperience(walletAddress) {
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT COUNT(*) as count FROM agent_messages WHERE fromWallet = ? AND outcome = 'accepted'`,
+      [walletAddress],
+      (err, row) => {
+        if (err || !row) return resolve(0);
+        resolve(row.count);
+      }
+    );
+  });
+}
+
+module.exports.getA2AExperience = getA2AExperience;
